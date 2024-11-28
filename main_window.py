@@ -6,6 +6,7 @@ from datetime import datetime
 from .models import Prompt, PromptType
 from .storage import FileStorage
 from .llm_utils import run_llm
+from .evaluation_widget import EvaluationWidget
     
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -13,6 +14,7 @@ class MainWindow(QMainWindow):
         self.storage = FileStorage()
         self.setup_ui()
         self.current_prompt = None
+        self._prompts = []
 
     def setup_ui(self):
         self.setWindowTitle("Prompt Nanny")
@@ -101,11 +103,39 @@ class MainWindow(QMainWindow):
 
         right_panel.addTab(playground_widget, "Playground")
 
+        # Add Evaluation tab
+        self.evaluation_widget = EvaluationWidget()
+        right_panel.addTab(self.evaluation_widget, "Evaluation")
+
+        # Connect evaluation signals
+        self.evaluation_widget.test_set_saved.connect(self.on_test_set_saved)
+        self.evaluation_widget.test_set_loaded.connect(self.on_test_set_loaded)
+        self.prompt_list.currentItemChanged.connect(self.on_prompt_selected_for_eval)
+
         # Add panels to main layout
         layout.addWidget(left_panel, 1)
         layout.addWidget(right_panel, 2)
 
         self.load_prompts()
+
+    @Slot()
+    def on_prompt_selected_for_eval(self, current, previous):
+        if not current or not self.evaluation_widget:
+            return
+            
+        selected_title = current.text()
+        selected_prompt = next((p for p in self._prompts if p.title == selected_title), None)
+        
+        if selected_prompt:
+            self.evaluation_widget.set_current_prompt(selected_prompt)
+
+    @Slot()
+    def on_test_set_saved(self, test_set_name):
+        self.statusBar().showMessage(f"Test set '{test_set_name}' saved", 3000)
+
+    @Slot()
+    def on_test_set_loaded(self, test_set_name):
+        self.statusBar().showMessage(f"Test set '{test_set_name}' loaded", 3000)
 
     @Slot()
     def create_new_prompt(self):

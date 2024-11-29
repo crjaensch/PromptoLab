@@ -26,9 +26,13 @@ class FileStorage:
         title_prefix = self._sanitize_title(prompt.title) if prompt.title else "untitled"
         return self.base_dir / prompt.prompt_type.name.lower() / f"{title_prefix}_{prompt.id}.json"
 
-    def save_prompt(self, prompt: Prompt) -> str:
+    def save_prompt(self, prompt: Prompt, old_type: Optional[PromptType] = None) -> str:
         if not prompt.id:
             prompt.id = str(uuid.uuid4())
+        
+        # If we have an old type and it's different from current type, delete the old file
+        if old_type and old_type != prompt.prompt_type:
+            self.delete_prompt(prompt.id, old_type)
         
         prompt_path = self._get_prompt_path(prompt)
         with prompt_path.open('w') as f:
@@ -52,7 +56,7 @@ class FileStorage:
             for prompt_file in type_dir.glob("*.json"):
                 with prompt_file.open('r') as f:
                     prompts.append(Prompt.from_dict(json.load(f)))
-        return sorted(prompts, key=lambda p: p.updated_at, reverse=True)
+        return sorted(prompts, key=lambda p: p.title.lower())  # Sort case-insensitive by title
 
     def delete_prompt(self, prompt_id: str, prompt_type: PromptType):
         type_dir = self.base_dir / prompt_type.name.lower()

@@ -9,6 +9,7 @@ from .models import Prompt, PromptType
 from .storage import FileStorage
 from .llm_utils import run_llm
 from .evaluation_widget import EvaluationWidget
+
 class CollapsiblePanel(QWidget):
     def __init__(self, title, parent=None):
         super().__init__(parent)
@@ -57,15 +58,17 @@ class CollapsiblePanel(QWidget):
             )
         )
         self.content.setVisible(self.expanded)
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.storage = FileStorage()
         self.settings = QSettings("Codeium", "PromptNanny")
-        self.setup_ui()
-        self.load_state()
-        self.current_prompt = None
         self._prompts = []
+        self.current_prompt = None
+        self.setup_ui()
+        self.load_prompts()  # Load prompts before loading state
+        self.load_state()
 
     def setup_ui(self):
         self.setWindowTitle("Prompt Nanny")
@@ -256,8 +259,6 @@ class MainWindow(QMainWindow):
         self.evaluation_widget = EvaluationWidget()
         self.tab_widget.addTab(self.evaluation_widget, "Eval Playground")
 
-        self.load_prompts()
-
     def save_state(self):
         self.settings.setValue("left_panel_expanded", self.left_panel.expanded)
         self.settings.setValue("params_panel_expanded", self.params_panel.expanded)
@@ -314,6 +315,9 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def save_prompt(self):
+        # Get the old type if this is an existing prompt
+        old_type = self.current_prompt.prompt_type if self.current_prompt else None
+        
         prompt = Prompt(
             title=self.title_edit.text(),
             content=self.content_edit.toPlainText(),
@@ -322,7 +326,7 @@ class MainWindow(QMainWindow):
             updated_at=datetime.now(),
             id=self.current_prompt.id if self.current_prompt else None
         )
-        self.storage.save_prompt(prompt)
+        self.storage.save_prompt(prompt, old_type)
         self.load_prompts()
 
     def load_prompts(self):
@@ -330,6 +334,10 @@ class MainWindow(QMainWindow):
         self._prompts = self.storage.get_all_prompts()
         for prompt in self._prompts:
             self.prompt_list.addItem(prompt.title)
+            
+        # Select the first prompt if available
+        if self.prompt_list.count() > 0:
+            self.prompt_list.setCurrentRow(0)  # This will trigger on_prompt_selected
 
     @Slot()
     def on_prompt_selected(self, current, previous):
@@ -345,7 +353,6 @@ class MainWindow(QMainWindow):
             self.content_edit.setPlainText(selected_prompt.content)
             self.type_combo.setCurrentText(selected_prompt.prompt_type.value)
             self.playground_input.setPlainText(selected_prompt.content)
-
 
     @Slot()
     def filter_prompts(self):

@@ -2,8 +2,8 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTableWidget, QTableWidgetItem, QTextEdit, 
                               QComboBox, QLabel, QLineEdit, QMessageBox,
-                              QItemDelegate)
-from PySide6.QtCore import Qt, Signal
+                              QItemDelegate, QFrame)
+from PySide6.QtCore import Qt, Signal, QSettings
 from .models import TestCase, TestSet
 from .test_storage import TestSetStorage
 from .llm_utils import run_llm
@@ -11,6 +11,13 @@ from .llm_utils import run_llm
 class MultilineTextDelegate(QItemDelegate):
     def createEditor(self, parent, option, index):
         editor = QTextEdit(parent)
+        editor.setStyleSheet("""
+            QTextEdit {
+                padding: 16px;
+                min-height: 100px;
+                border: 1px solid #E5E7EB;
+            }
+        """)
         return editor
 
     def setEditorData(self, editor, index):
@@ -20,22 +27,40 @@ class MultilineTextDelegate(QItemDelegate):
         model.setData(index, editor.toPlainText())
 
 class EvaluationWidget(QWidget):
-    test_set_saved = Signal(str)  # Signal emitted when a test set is saved
-    test_set_loaded = Signal(str)  # Signal emitted when a test set is loaded
+    test_set_saved = Signal(str)
+    test_set_loaded = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.storage = TestSetStorage()
+        self.settings = QSettings("Codeium", "PromptNanny")
         self.current_test_set = None
         self.setup_ui()
+        self.load_state()
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setSpacing(16)  # Consistent spacing
 
         # Test Set Management
-        test_set_layout = QHBoxLayout()
+        test_set_frame = QFrame()
+        test_set_frame.setFrameStyle(QFrame.StyledPanel)
+        test_set_frame.setStyleSheet("QFrame { border: 1px solid #E5E7EB; }")
+        test_set_layout = QHBoxLayout(test_set_frame)
+        test_set_layout.setSpacing(16)
+
         self.test_set_name = QLineEdit()
         self.test_set_name.setPlaceholderText("Test Set Name")
+        self.test_set_name.setFixedHeight(40)  # Consistent height
+        self.test_set_name.setStyleSheet("""
+            QLineEdit {
+                padding: 0 16px;
+                border: 1px solid #E5E7EB;
+            }
+            QLineEdit:hover {
+                background: #F3F4F6;
+            }
+        """)
         test_set_layout.addWidget(self.test_set_name)
 
         self.model_combo = QComboBox()
@@ -43,9 +68,19 @@ class EvaluationWidget(QWidget):
             "gpt-4o-mini", "gpt-4o", "claude-3.5-sonnet",
             "claude-3.5-haiku", "gemini-flash", "gemini-1.5-pro"
         ])
+        self.model_combo.setFixedHeight(40)  # Consistent height
+        self.model_combo.setStyleSheet("""
+            QComboBox {
+                padding: 0 16px;
+                border: 1px solid #E5E7EB;
+            }
+            QComboBox:hover {
+                background: #F3F4F6;
+            }
+        """)
         test_set_layout.addWidget(QLabel("Model:"))
         test_set_layout.addWidget(self.model_combo)
-        layout.addLayout(test_set_layout)
+        layout.addWidget(test_set_frame)
 
         # Test Cases Table
         self.table = QTableWidget()
@@ -53,41 +88,87 @@ class EvaluationWidget(QWidget):
         self.table.setHorizontalHeaderLabels(["Input", "Baseline Output", "Current Output"])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setItemDelegate(MultilineTextDelegate())
+        self.table.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #E5E7EB;
+            }
+            QTableWidget::item:hover {
+                background: #F3F4F6;
+            }
+            QHeaderView::section {
+                padding: 16px;
+                border: 1px solid #E5E7EB;
+                background: white;
+            }
+        """)
         layout.addWidget(self.table)
 
         # Control Buttons
-        buttons_layout = QHBoxLayout()
+        buttons_frame = QFrame()
+        buttons_frame.setFrameStyle(QFrame.StyledPanel)
+        buttons_frame.setStyleSheet("QFrame { border: 1px solid #E5E7EB; }")
+        buttons_layout = QHBoxLayout(buttons_frame)
+        buttons_layout.setSpacing(16)
+        
+        button_style = """
+            QPushButton {
+                padding: 8px 16px;
+                border: 1px solid #E5E7EB;
+                min-height: 40px;
+            }
+            QPushButton:hover {
+                background: #F3F4F6;
+            }
+            QPushButton:checked {
+                background: #EBF5FF;
+            }
+        """
         
         add_row_btn = QPushButton("Add Row")
-        add_row_btn.clicked.connect(self.add_row)
-        
         generate_baseline_btn = QPushButton("Generate Baseline")
-        generate_baseline_btn.clicked.connect(self.generate_baseline)
-        
         self.freeze_baseline_btn = QPushButton("Freeze Baseline")
         self.freeze_baseline_btn.setCheckable(True)
-        self.freeze_baseline_btn.clicked.connect(self.toggle_baseline_frozen)
-        
         save_btn = QPushButton("Save Test Set")
-        save_btn.clicked.connect(self.save_test_set)
-        
         load_btn = QPushButton("Load Test Set")
-        load_btn.clicked.connect(self.load_test_set)
-        
         run_current_btn = QPushButton("Run Current")
-        run_current_btn.clicked.connect(self.run_current)
-
+        
         for btn in [add_row_btn, generate_baseline_btn, self.freeze_baseline_btn,
                    save_btn, load_btn, run_current_btn]:
+            btn.setStyleSheet(button_style)
             buttons_layout.addWidget(btn)
         
-        layout.addLayout(buttons_layout)
+        add_row_btn.clicked.connect(self.add_row)
+        generate_baseline_btn.clicked.connect(self.generate_baseline)
+        self.freeze_baseline_btn.clicked.connect(self.toggle_baseline_frozen)
+        save_btn.clicked.connect(self.save_test_set)
+        load_btn.clicked.connect(self.load_test_set)
+        run_current_btn.clicked.connect(self.run_current)
+        
+        layout.addWidget(buttons_frame)
+
+    def save_state(self):
+        self.settings.setValue("eval_baseline_frozen", self.freeze_baseline_btn.isChecked())
+        self.settings.setValue("eval_selected_model", self.model_combo.currentText())
+        
+    def load_state(self):
+        frozen = self.settings.value("eval_baseline_frozen", False, bool)
+        self.freeze_baseline_btn.setChecked(frozen)
+        
+        model = self.settings.value("eval_selected_model", "gpt-4o")
+        self.model_combo.setCurrentText(model)
 
     def add_row(self):
         row = self.table.rowCount()
         self.table.insertRow(row)
         for col in range(3):
             editor = QTextEdit()
+            editor.setStyleSheet("""
+                QTextEdit {
+                    padding: 16px;
+                    min-height: 100px;
+                    border: 1px solid #E5E7EB;
+                }
+            """)
             self.table.setCellWidget(row, col, editor)
 
     def generate_baseline(self):
@@ -171,16 +252,37 @@ class EvaluationWidget(QWidget):
 
             input_editor = QTextEdit()
             input_editor.setPlainText(case.input_text)
+            input_editor.setStyleSheet("""
+                QTextEdit {
+                    padding: 16px;
+                    min-height: 100px;
+                    border: 1px solid #E5E7EB;
+                }
+            """)
             self.table.setCellWidget(row, 0, input_editor)
 
             baseline_editor = QTextEdit()
             if case.baseline_output:
                 baseline_editor.setPlainText(case.baseline_output)
+            baseline_editor.setStyleSheet("""
+                QTextEdit {
+                    padding: 16px;
+                    min-height: 100px;
+                    border: 1px solid #E5E7EB;
+                }
+            """)
             self.table.setCellWidget(row, 1, baseline_editor)
 
             current_editor = QTextEdit()
             if case.current_output:
                 current_editor.setPlainText(case.current_output)
+            current_editor.setStyleSheet("""
+                QTextEdit {
+                    padding: 16px;
+                    min-height: 100px;
+                    border: 1px solid #E5E7EB;
+                }
+            """)
             self.table.setCellWidget(row, 2, current_editor)
             
         self.test_set_loaded.emit(name)  # Emit signal when test set is loaded

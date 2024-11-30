@@ -63,7 +63,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.storage = FileStorage()
-        self.settings = QSettings("Codeium", "PromptNanny")
+        self.settings = QSettings("Codeium", "PromptoLab")
         self._prompts = []
         self.current_prompt = None
         self.setup_ui()
@@ -71,7 +71,7 @@ class MainWindow(QMainWindow):
         self.load_state()
 
     def setup_ui(self):
-        self.setWindowTitle("Prompt Nanny")
+        self.setWindowTitle("PromptoLab")
         self.setMinimumSize(1200, 800)
 
         # Main layout

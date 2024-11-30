@@ -1,7 +1,7 @@
-# Prompt Nanny UI Specification
+# PromptoLab UI Specification
 
 ## 1. Application Structure and Navigation
-The PromptNanny UI consists of three main parts, each accessible through a tab control located at the top left of the main window:
+The PromptoLab UI consists of three main parts, each accessible through a tab control located at the top left of the main window:
 - **Prompts Catalog**
 - **LLM Playground**
 - **Eval Playground**

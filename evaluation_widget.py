@@ -33,7 +33,7 @@ class EvaluationWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.storage = TestSetStorage()
-        self.settings = QSettings("Codeium", "PromptNanny")
+        self.settings = QSettings("Codeium", "PromptoLab")
         self.current_test_set = None
         self.setup_ui()
         self.load_state()

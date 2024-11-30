@@ -3,7 +3,7 @@ __pycache__/
 *$py.class
 .env
 .venv
-.prompt_nanny
+.promptolab
 env/
 venv/
 scratch/

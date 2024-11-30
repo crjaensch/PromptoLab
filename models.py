@@ -14,7 +14,8 @@ class PromptType(Enum):
 @dataclass
 class Prompt:
     title: str
-    content: str
+    user_prompt: str
+    system_prompt: Optional[str]
     prompt_type: PromptType
     created_at: datetime
     updated_at: datetime

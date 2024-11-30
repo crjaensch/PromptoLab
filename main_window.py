@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                               QPushButton, QLineEdit, QTextEdit, QComboBox,
                               QListWidget, QTabWidget, QLabel, QSplitter,
-                              QFrame, QSizePolicy)
+                              QFrame, QSizePolicy, QCheckBox, QListWidgetItem)
 from PySide6.QtCore import Qt, Slot, QSettings, QPropertyAnimation, QSize
 from PySide6.QtGui import QIcon
 from datetime import datetime
@@ -81,7 +81,7 @@ class MainWindow(QMainWindow):
         
         # Tab widget at top left
         self.tab_widget = QTabWidget()
-        self.tab_widget.setTabPosition(QTabWidget.West)
+        self.tab_widget.setTabPosition(QTabWidget.North)
         main_layout.addWidget(self.tab_widget)
         
         # Prompts Catalog Tab
@@ -168,16 +168,44 @@ class MainWindow(QMainWindow):
         title_layout.addWidget(self.type_combo)
         editor_layout.addLayout(title_layout)
 
-        # Prompt content editor with styling
-        self.content_edit = QTextEdit()
-        self.content_edit.setStyleSheet("""
+        # System prompt
+        self.editor_system_prompt_visible = self.settings.value("editor_system_prompt_visible", False, bool)
+        
+        # Create horizontal layout for checkbox and label
+        editor_system_prompt_header = QHBoxLayout()
+        self.editor_system_prompt_checkbox = QCheckBox()
+        self.editor_system_prompt_checkbox.setChecked(self.editor_system_prompt_visible)
+        self.editor_system_prompt_checkbox.stateChanged.connect(self.toggle_editor_system_prompt)
+        editor_system_prompt_label = QLabel("System Prompt:")
+        editor_system_prompt_header.addWidget(self.editor_system_prompt_checkbox)
+        editor_system_prompt_header.addWidget(editor_system_prompt_label)
+        editor_system_prompt_header.addStretch()
+        editor_layout.addLayout(editor_system_prompt_header)
+        
+        self.editor_system_prompt = QTextEdit()
+        self.editor_system_prompt.setVisible(self.editor_system_prompt_visible)
+        self.editor_system_prompt.setStyleSheet("""
             QTextEdit {
-                padding: 16px;
+                padding: 16px;  
                 min-height: 100px;
-                border: 1px solid #E5E7EB;
+                background: navy;
+                border: 1px solid white;
             }
         """)
-        editor_layout.addWidget(self.content_edit)
+        self.editor_system_prompt.setPlaceholderText("Enter an optional system prompt...")
+        editor_layout.addWidget(self.editor_system_prompt)
+
+        # User prompt content editor with styling
+        self.editor_content_edit = QTextEdit()
+        self.editor_content_edit.setStyleSheet("""
+               QTextEdit {
+                padding: 16px;
+                min-height: 100px;
+                background: navy;
+                border: 1px solid white;
+            }
+        """)
+        editor_layout.addWidget(self.editor_content_edit)
 
         # Save button
         save_btn = QPushButton("Save")
@@ -213,35 +241,56 @@ class MainWindow(QMainWindow):
         playground_main_layout = QVBoxLayout(playground_main)
         
         # System prompt
-        self.system_prompt_visible = self.settings.value("system_prompt_visible", True, bool)
+        self.system_prompt_visible = self.settings.value("playground_system_prompt_visible", False, bool)
+        
+        # Create horizontal layout for checkbox and label
+        system_prompt_header = QHBoxLayout()
+        self.system_prompt_checkbox = QCheckBox()
+        self.system_prompt_checkbox.setChecked(self.system_prompt_visible)
+        self.system_prompt_checkbox.stateChanged.connect(self.toggle_playground_system_prompt)
+        system_prompt_label = QLabel("System Prompt:")
+        system_prompt_header.addWidget(self.system_prompt_checkbox)
+        system_prompt_header.addWidget(system_prompt_label)
+        system_prompt_header.addStretch()
+        playground_main_layout.addLayout(system_prompt_header)
+        
         self.system_prompt = QTextEdit()
         self.system_prompt.setVisible(self.system_prompt_visible)
         self.system_prompt.setStyleSheet("""
             QTextEdit {
                 padding: 16px;
-                min-height: 100px;
-                border: 1px solid #E5E7EB;
+                min-height: 80px;
+                background: navy;
+                border: 1px solid white;
             }
         """)
+        self.system_prompt.setPlaceholderText("Enter an optional system prompt...")
         playground_main_layout.addWidget(self.system_prompt)
 
-        # Input and output
+        # User prompt and output
         playground_splitter = QSplitter(Qt.Vertical)
-        self.playground_input = QTextEdit()
+        self.user_prompt = QTextEdit()
+        self.user_prompt.setStyleSheet("""
+            QTextEdit {
+                padding: 16px;
+                min-height: 80px;
+                background: navy;
+                border: 1px solid white;
+            }
+        """)
+
         self.playground_output = QTextEdit()
         self.playground_output.setReadOnly(True)
+        self.playground_output.setStyleSheet("""
+            QTextEdit {
+                padding: 16px;
+                min-height: 100px;
+                border: 1px solid white;
+                background: transparent;
+            }
+        """)
         
-        # Apply consistent styling
-        for editor in [self.playground_input, self.playground_output]:
-            editor.setStyleSheet("""
-                QTextEdit {
-                    padding: 16px;
-                    min-height: 100px;
-                    border: 1px solid #E5E7EB;
-                }
-            """)
-        
-        playground_splitter.addWidget(self.playground_input)
+        playground_splitter.addWidget(self.user_prompt)
         playground_splitter.addWidget(self.playground_output)
         playground_main_layout.addWidget(playground_splitter)
 
@@ -262,7 +311,8 @@ class MainWindow(QMainWindow):
     def save_state(self):
         self.settings.setValue("left_panel_expanded", self.left_panel.expanded)
         self.settings.setValue("params_panel_expanded", self.params_panel.expanded)
-        self.settings.setValue("system_prompt_visible", self.system_prompt_visible)
+        self.settings.setValue("editor_system_prompt_visible", self.editor_system_prompt_visible)
+        self.settings.setValue("playground_system_prompt_visible", self.system_prompt_visible)
         self.settings.setValue("selected_model", self.model_combo.currentText())
         self.settings.setValue("system_prompt_text", self.system_prompt.toPlainText())
         
@@ -310,21 +360,22 @@ class MainWindow(QMainWindow):
     def create_new_prompt(self):
         self.current_prompt = None
         self.title_edit.clear()
-        self.content_edit.clear()
+        self.editor_content_edit.clear()
+        self.editor_system_prompt.clear()
         self.type_combo.setCurrentIndex(0)
 
     @Slot()
     def save_prompt(self):
-        # Get the old type if this is an existing prompt
         old_type = self.current_prompt.prompt_type if self.current_prompt else None
         
         prompt = Prompt(
             title=self.title_edit.text(),
-            content=self.content_edit.toPlainText(),
+            user_prompt=self.editor_content_edit.toPlainText(),
+            system_prompt=self.editor_system_prompt.toPlainText() or None,  # Convert empty string to None
             prompt_type=PromptType(self.type_combo.currentText()),
             created_at=datetime.now() if self.current_prompt is None else self.current_prompt.created_at,
             updated_at=datetime.now(),
-            id=self.current_prompt.id if self.current_prompt else None
+            id=self.current_prompt.id if self.current_prompt else ""
         )
         self.storage.save_prompt(prompt, old_type)
         self.load_prompts()
@@ -332,8 +383,10 @@ class MainWindow(QMainWindow):
     def load_prompts(self):
         self.prompt_list.clear()
         self._prompts = self.storage.get_all_prompts()
-        for prompt in self._prompts:
-            self.prompt_list.addItem(prompt.title)
+        for i, prompt in enumerate(self._prompts):
+            item = QListWidgetItem(prompt.title)
+            item.setData(Qt.UserRole, i)  # Store the index in the _prompts list
+            self.prompt_list.addItem(item)
             
         # Select the first prompt if available
         if self.prompt_list.count() > 0:
@@ -341,18 +394,31 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def on_prompt_selected(self, current, previous):
-        if not current:
-            return
-        
-        selected_title = current.text()
-        selected_prompt = next((p for p in self._prompts if p.title == selected_title), None)
-        
-        if selected_prompt:
-            self.current_prompt = selected_prompt
-            self.title_edit.setText(selected_prompt.title)
-            self.content_edit.setPlainText(selected_prompt.content)
-            self.type_combo.setCurrentText(selected_prompt.prompt_type.value)
-            self.playground_input.setPlainText(selected_prompt.content)
+        if current:
+            index = current.data(Qt.UserRole)
+            if index is not None and 0 <= index < len(self._prompts):
+                selected_prompt = self._prompts[index]
+                self.current_prompt = selected_prompt
+                self.title_edit.setText(selected_prompt.title)
+                self.editor_content_edit.setPlainText(selected_prompt.user_prompt)
+                if selected_prompt.system_prompt:
+                    self.editor_system_prompt.setPlainText(selected_prompt.system_prompt)
+                    self.editor_system_prompt_checkbox.setChecked(True)
+                    self.editor_system_prompt.setVisible(True)
+                else:
+                    self.editor_system_prompt.clear()
+                    self.editor_system_prompt_checkbox.setChecked(False)
+                    self.editor_system_prompt.setVisible(False)
+                self.type_combo.setCurrentText(selected_prompt.prompt_type.value)
+                self.user_prompt.setPlainText(selected_prompt.user_prompt)
+                if selected_prompt.system_prompt:
+                    self.system_prompt.setPlainText(selected_prompt.system_prompt)
+                    self.system_prompt_checkbox.setChecked(True)
+                    self.system_prompt.setVisible(True)
+                else:
+                    self.system_prompt.clear()
+                    self.system_prompt_checkbox.setChecked(False)
+                    self.system_prompt.setVisible(False)
 
     @Slot()
     def filter_prompts(self):
@@ -368,8 +434,18 @@ class MainWindow(QMainWindow):
         
         try:
             model = self.model_combo.currentText()
-            prompt_text = self.playground_input.toPlainText()
+            prompt_text = self.user_prompt.toPlainText()
             result = run_llm(prompt_text, model)
             self.playground_output.setMarkdown(result) # render markdown
         except Exception as e:
             self.playground_output.setPlainText(f"Error: {str(e)}")
+
+    @Slot()
+    def toggle_editor_system_prompt(self):
+        self.editor_system_prompt_visible = self.editor_system_prompt_checkbox.isChecked()
+        self.editor_system_prompt.setVisible(self.editor_system_prompt_visible)
+
+    @Slot()
+    def toggle_playground_system_prompt(self):
+        self.system_prompt_visible = self.system_prompt_checkbox.isChecked()
+        self.system_prompt.setVisible(self.system_prompt_visible)

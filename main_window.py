@@ -30,7 +30,7 @@ class CollapsiblePanel(QWidget):
         
         # Toggle button with chevron
         self.toggle_btn = QPushButton()
-        self.toggle_btn.setIcon(QIcon("PromptNanny/icons/chevron-left.svg"))
+        self.toggle_btn.setIcon(QIcon("PromptoLab/icons/chevron-left.svg"))
         self.toggle_btn.clicked.connect(self.toggle_panel)
         self.toggle_btn.setFixedSize(48, 48)
         toggle_layout.addWidget(self.toggle_btn)
@@ -52,9 +52,9 @@ class CollapsiblePanel(QWidget):
         
         self.toggle_btn.setIcon(
             QIcon(
-                "PromptNanny/icons/chevron-left.svg"
+                "PromptoLab/icons/chevron-left.svg"
                 if self.expanded
-                else "PromptNanny/icons/chevron-right.svg"
+                else "PromptoLab/icons/chevron-right.svg"
             )
         )
         self.content.setVisible(self.expanded)
@@ -96,12 +96,12 @@ class MainWindow(QMainWindow):
         search_list_frame.setFrameStyle(QFrame.StyledPanel)
         search_list_frame.setStyleSheet("""
             QFrame { 
-                border: 1px solid white; 
-                padding: 12px; 
+                border: 1px solid #CCCCCC; 
+                padding: 6px; 
             }
             QLineEdit, QListWidget { 
-                border: 1px solid white;
-                background: transparent;
+                background: #F5F5F5;
+                border: 1px solid #CCCCCC;
             }
             QLabel { 
                 border: none;
@@ -119,10 +119,9 @@ class MainWindow(QMainWindow):
         self.search_box.setPlaceholderText("Search prompts...")
         self.search_box.setStyleSheet("""
             QLineEdit {
-                border: 1px solid white;
                 padding: 8px;
-                background: transparent;
-            }
+                background: #F5F5F5;
+                border: 1px solid #CCCCCC;            }
         """)
         self.search_box.textChanged.connect(self.filter_prompts)
         search_list_layout.addWidget(self.search_box)
@@ -135,11 +134,11 @@ class MainWindow(QMainWindow):
         self.prompt_list.currentItemChanged.connect(self.on_prompt_selected)
         self.prompt_list.setStyleSheet("""
             QListWidget {
-                border: 1px solid white;
-                background: transparent;
+                background: #F5F5F5;
+                border: 1px solid #CCCCCC;
             }
-            QListWidget::item:hover { background: #4169E1; }
-            QListWidget::item:selected { background: #4169E1; }
+            QListWidget::item:hover { background: #BBBBBB; }
+            QListWidget::item:selected { background: #BBBBBB; }
         """)
         search_list_layout.addWidget(self.prompt_list)
         
@@ -182,30 +181,32 @@ class MainWindow(QMainWindow):
         editor_system_prompt_header.addStretch()
         editor_layout.addLayout(editor_system_prompt_header)
         
+        # System prompt editor (40% height)
         self.editor_system_prompt = QTextEdit()
         self.editor_system_prompt.setVisible(self.editor_system_prompt_visible)
+        self.editor_system_prompt.setMinimumHeight(120)  # 40% of 300px total
         self.editor_system_prompt.setStyleSheet("""
             QTextEdit {
                 padding: 16px;  
-                min-height: 100px;
-                background: navy;
-                border: 1px solid white;
+                background: #F5F5F5;
+                border: 1px solid #CCCCCC;
             }
         """)
         self.editor_system_prompt.setPlaceholderText("Enter an optional system prompt...")
-        editor_layout.addWidget(self.editor_system_prompt)
+        editor_layout.addWidget(self.editor_system_prompt, 40)  # 40% stretch factor
 
-        # User prompt content editor with styling
+        # User prompt content editor (60% height)
         self.editor_content_edit = QTextEdit()
+        self.editor_content_edit.setMinimumHeight(180)  # 60% of 300px total
         self.editor_content_edit.setStyleSheet("""
-               QTextEdit {
+            QTextEdit {
                 padding: 16px;
-                min-height: 100px;
-                background: navy;
-                border: 1px solid white;
+                background: #F5F5F5;
+                border: 1px solid #CCCCCC;
             }
         """)
-        editor_layout.addWidget(self.editor_content_edit)
+        self.editor_content_edit.setPlaceholderText("Enter your prompt here...")
+        editor_layout.addWidget(self.editor_content_edit, 60)  # 60% stretch factor
 
         # Save button
         save_btn = QPushButton("Save")
@@ -228,7 +229,7 @@ class MainWindow(QMainWindow):
         # Model selection
         model_layout = QHBoxLayout()
         self.model_combo = QComboBox()
-        self.model_combo.addItems(["gpt-4o-mini", "gpt-4o", "o1-mini", "o1-preview", "claude-3.5-sonnet", "claude-3.5-haiku"])
+        self.model_combo.addItems(["gpt-4o-mini", "gpt-4o-2024-11-20", "o1-mini", "o1-preview", "groq-llama3", "claude-3.5-sonnet"])
         model_layout.addWidget(QLabel("Model:"))
         model_layout.addWidget(self.model_combo)
         params_content_layout.addLayout(model_layout)
@@ -260,45 +261,55 @@ class MainWindow(QMainWindow):
             QTextEdit {
                 padding: 16px;
                 min-height: 80px;
-                background: navy;
-                border: 1px solid white;
+                background: #F5F5F5;
+                border: 1px solid #CCCCCC;
             }
         """)
         self.system_prompt.setPlaceholderText("Enter an optional system prompt...")
         playground_main_layout.addWidget(self.system_prompt)
 
-        # User prompt and output
-        playground_splitter = QSplitter(Qt.Vertical)
+        # Create the user prompt
         self.user_prompt = QTextEdit()
         self.user_prompt.setStyleSheet("""
             QTextEdit {
                 padding: 16px;
                 min-height: 80px;
-                background: navy;
-                border: 1px solid white;
+                background: #F5F5F5;
+                border: 1px solid #CCCCCC;
             }
         """)
+        self.user_prompt.setPlaceholderText("Enter your prompt here...")
 
+        # Create a container for user prompt and run button
+        input_container = QWidget()
+        input_layout = QVBoxLayout(input_container)
+        input_layout.setContentsMargins(0, 0, 0, 0)
+        input_layout.addWidget(self.user_prompt)
+        
+        # Run button
+        run_btn = QPushButton("Run")
+        run_btn.clicked.connect(self.run_playground)
+        input_layout.addWidget(run_btn)
+        
+        # Output area
         self.playground_output = QTextEdit()
         self.playground_output.setReadOnly(True)
         self.playground_output.setStyleSheet("""
             QTextEdit {
                 padding: 16px;
                 min-height: 100px;
-                border: 1px solid white;
-                background: transparent;
+                background: #F8F8F8;  /* Very light gray */
+                border: 1px solid #CCCCCC;
+                color: #2F4F4F;  /* Dark slate gray for text */
             }
         """)
         
-        playground_splitter.addWidget(self.user_prompt)
+        # Add widgets to splitter in desired order
+        playground_splitter = QSplitter(Qt.Vertical)
+        playground_splitter.addWidget(input_container)
         playground_splitter.addWidget(self.playground_output)
         playground_main_layout.addWidget(playground_splitter)
 
-        # Run button
-        run_btn = QPushButton("Run")
-        run_btn.clicked.connect(self.run_playground)
-        playground_main_layout.addWidget(run_btn)
-        
         playground_layout.addWidget(playground_main)
         playground_layout.setSpacing(16)  # Consistent spacing
         
@@ -434,9 +445,21 @@ class MainWindow(QMainWindow):
         
         try:
             model = self.model_combo.currentText()
-            prompt_text = self.user_prompt.toPlainText()
-            result = run_llm(prompt_text, model)
-            self.playground_output.setMarkdown(result) # render markdown
+            user_prompt_text = self.user_prompt.toPlainText()
+            
+            # Only get system prompt if the checkbox is checked and prompt is visible
+            system_prompt_text = None
+            if self.system_prompt_checkbox.isChecked() and self.system_prompt.isVisible():
+                system_prompt_text = self.system_prompt.toPlainText()
+                if not system_prompt_text.strip():  # If system prompt is empty after stripping whitespace
+                    system_prompt_text = None
+            
+            if not user_prompt_text.strip():
+                self.playground_output.setPlainText("Error: User prompt cannot be empty")
+                return
+                
+            result = run_llm(user_prompt_text, system_prompt_text, model)
+            self.playground_output.setMarkdown(result)  # render markdown
         except Exception as e:
             self.playground_output.setPlainText(f"Error: {str(e)}")
 

@@ -5,7 +5,12 @@ from typing import List, Optional
 from datetime import datetime
 import uuid
 import re
+import logging
 from .models import Prompt, PromptType
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class FileStorage:
     def __init__(self, base_dir: str = "prompts"):
@@ -29,14 +34,24 @@ class FileStorage:
     def save_prompt(self, prompt: Prompt, old_type: Optional[PromptType] = None) -> str:
         if not prompt.id:
             prompt.id = str(uuid.uuid4())
+            logger.info("Generated new UUID for prompt: %s", prompt.id)
         
         # If we have an old type and it's different from current type, delete the old file
         if old_type and old_type != prompt.prompt_type:
+            logger.info("Prompt type changed from %s to %s. Deleting old file.", 
+                       old_type.value, prompt.prompt_type.value)
             self.delete_prompt(prompt.id, old_type)
         
         prompt_path = self._get_prompt_path(prompt)
+        prompt_dict = prompt.to_dict()
+        
+        # Log the JSON data being saved
+        logger.info("Saving prompt to %s with data:\n%s", 
+                   prompt_path, 
+                   json.dumps(prompt_dict, indent=2))
+        
         with prompt_path.open('w') as f:
-            json.dump(prompt.to_dict(), f, indent=2)
+            json.dump(prompt_dict, f, indent=2)
         return prompt.id
 
     def get_prompt(self, prompt_id: str, prompt_type: PromptType) -> Optional[Prompt]:

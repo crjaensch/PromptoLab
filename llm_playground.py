@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QCheckBox)
 from PySide6.QtCore import Qt, Slot
 from .collapsible_panel import CollapsiblePanel
+from .expandable_text import ExpandableTextWidget
 from .llm_utils import run_llm
 
 class LLMPlaygroundWidget(QWidget):
@@ -85,7 +86,7 @@ class LLMPlaygroundWidget(QWidget):
         input_layout.addWidget(run_btn)
         
         # Output area
-        self.playground_output = QTextEdit()
+        self.playground_output = ExpandableTextWidget()
         self.playground_output.setReadOnly(True)
         self.playground_output.setStyleSheet("""
             QTextEdit {
@@ -101,6 +102,22 @@ class LLMPlaygroundWidget(QWidget):
         playground_splitter = QSplitter(Qt.Vertical)
         playground_splitter.addWidget(input_container)
         playground_splitter.addWidget(self.playground_output)
+        
+        # Set initial sizes for the splitter (equal distribution)
+        playground_splitter.setSizes([1000, 1000])
+        
+        # Store original heights for restoration
+        self.original_heights = {
+            'system_prompt': self.system_prompt.minimumHeight(),
+            'user_prompt': self.user_prompt.minimumHeight()
+        }
+        
+        # Connect the expandable widget's signals to update UI
+        self.playground_output.expandedChanged.connect(self.toggle_compact_mode)
+        self.playground_output.sizeChanged.connect(lambda: playground_splitter.setSizes(
+            [200, 1800] if self.playground_output.is_expanded else [1000, 1000]
+        ))
+        
         playground_main_layout.addWidget(playground_splitter)
 
         playground_layout.addWidget(playground_main)
@@ -163,3 +180,33 @@ class LLMPlaygroundWidget(QWidget):
                 self.system_prompt.clear()
                 self.system_prompt_checkbox.setChecked(False)
                 self.system_prompt.setVisible(False)
+
+    def toggle_compact_mode(self, expanded):
+        """Toggle between compact and normal mode for input controls"""
+        if expanded:
+            # Compact mode
+            if self.system_prompt.isVisible():
+                self.system_prompt.setMinimumHeight(40)
+                self.system_prompt.setMaximumHeight(60)
+            self.user_prompt.setMinimumHeight(40)
+            self.user_prompt.setMaximumHeight(60)
+            
+            # Update placeholders for better visibility in compact mode
+            if self.system_prompt.toPlainText():
+                self.system_prompt.setPlaceholderText("System: " + self.system_prompt.toPlainText()[:50] + "...")
+            self.user_prompt.setPlaceholderText("User: " + (self.user_prompt.toPlainText() or "Enter your prompt here..."))
+            
+            # Optional: Collapse parameters panel if expanded
+            if self.params_panel.expanded:
+                self.params_panel.toggle_panel()
+        else:
+            # Normal mode
+            if self.system_prompt.isVisible():
+                self.system_prompt.setMinimumHeight(self.original_heights['system_prompt'])
+                self.system_prompt.setMaximumHeight(16777215)  # Qt's maximum value
+            self.user_prompt.setMinimumHeight(self.original_heights['user_prompt'])
+            self.user_prompt.setMaximumHeight(16777215)  # Qt's maximum value
+            
+            # Restore original placeholders
+            self.system_prompt.setPlaceholderText("Enter an optional system prompt...")
+            self.user_prompt.setPlaceholderText("Enter your prompt here...")

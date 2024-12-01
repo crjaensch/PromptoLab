@@ -214,6 +214,8 @@ class MainWindow(QMainWindow):
         editor_layout.addWidget(save_btn)
         
         catalog_layout.addWidget(editor_widget)
+        catalog_layout.setStretch(0, 0)
+        catalog_layout.setStretch(1, 1)
         catalog_layout.setSpacing(16)  # Consistent spacing
         
         self.tab_widget.addTab(catalog_widget, "Prompts Catalog")

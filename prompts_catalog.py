@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QLineEdit, QTextEdit, QComboBox, QListWidget,
-                              QLabel, QFrame, QListWidgetItem, QCheckBox)
+                              QLabel, QFrame, QListWidgetItem, QCheckBox,
+                              QMenu, QMessageBox)
 from PySide6.QtCore import Qt, Signal, Slot
 from datetime import datetime
 from .models import Prompt, PromptType
@@ -66,6 +67,8 @@ class PromptsCatalogWidget(QWidget):
         
         self.prompt_list = QListWidget()
         self.prompt_list.currentItemChanged.connect(self.on_prompt_selected)
+        self.prompt_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.prompt_list.customContextMenuRequested.connect(self.show_context_menu)
         self.prompt_list.setStyleSheet("""
             QListWidget {
                 background: #F5F5F5;
@@ -238,3 +241,37 @@ class PromptsCatalogWidget(QWidget):
     def toggle_editor_system_prompt(self):
         self.editor_system_prompt_visible = self.editor_system_prompt_checkbox.isChecked()
         self.editor_system_prompt.setVisible(self.editor_system_prompt_visible)
+
+    @Slot()
+    def show_context_menu(self, position):
+        item = self.prompt_list.itemAt(position)
+        if not item:
+            return
+            
+        menu = QMenu()
+        delete_action = menu.addAction("Delete")
+        action = menu.exec_(self.prompt_list.viewport().mapToGlobal(position))
+        
+        if action == delete_action:
+            self.delete_prompt(item)
+            
+    def delete_prompt(self, item):
+        index = item.data(Qt.UserRole)
+        if index is None or index >= len(self._prompts):
+            return
+            
+        prompt = self._prompts[index]
+        reply = QMessageBox.question(
+            self,
+            "Delete Prompt",
+            f"Are you sure you want to delete the prompt '{prompt.title}'?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.storage.delete_prompt(prompt.id, prompt.prompt_type)
+            self.load_prompts()
+            # Clear editor if the deleted prompt was selected
+            if self.current_prompt and self.current_prompt.id == prompt.id:
+                self.create_new_prompt()

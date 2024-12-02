@@ -1,11 +1,12 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QLineEdit, QTextEdit, QComboBox, QListWidget,
                               QLabel, QFrame, QListWidgetItem, QCheckBox,
-                              QMenu, QMessageBox)
+                              QMenu, QMessageBox, QSplitter)
 from PySide6.QtCore import Qt, Signal, Slot
 from datetime import datetime
 from .models import Prompt, PromptType
 from .collapsible_panel import CollapsiblePanel
+from .expandable_text import ExpandableTextWidget
 
 class PromptsCatalogWidget(QWidget):
     prompt_selected_for_eval = Signal(QListWidgetItem, QListWidgetItem)
@@ -89,8 +90,8 @@ class PromptsCatalogWidget(QWidget):
         catalog_layout.addWidget(self.left_panel)
 
         # Right panel (editor)
-        editor_widget = QWidget()
-        editor_layout = QVBoxLayout(editor_widget)
+        editor_frame = QWidget()
+        editor_layout = QVBoxLayout(editor_frame)
         
         # Title and type selection
         title_layout = QHBoxLayout()
@@ -104,60 +105,79 @@ class PromptsCatalogWidget(QWidget):
         title_layout.addWidget(self.type_combo)
         editor_layout.addLayout(title_layout)
 
-        # System prompt
-        self.editor_system_prompt_visible = self.settings.value("editor_system_prompt_visible", False, bool)
+        # System prompt header
+        system_prompt_header = QHBoxLayout()
+        self.system_prompt_checkbox = QCheckBox()
+        self.system_prompt_checkbox.setChecked(self.settings.value("system_prompt_visible", False, bool))
+        self.system_prompt_checkbox.stateChanged.connect(self.toggle_system_prompt)
+        system_prompt_label = QLabel("System Prompt:")
+        system_prompt_header.addWidget(self.system_prompt_checkbox)
+        system_prompt_header.addWidget(system_prompt_label)
+        system_prompt_header.addStretch()
+        editor_layout.addLayout(system_prompt_header)
         
-        # Create horizontal layout for checkbox and label
-        editor_system_prompt_header = QHBoxLayout()
-        self.editor_system_prompt_checkbox = QCheckBox()
-        self.editor_system_prompt_checkbox.setChecked(self.editor_system_prompt_visible)
-        self.editor_system_prompt_checkbox.stateChanged.connect(self.toggle_editor_system_prompt)
-        editor_system_prompt_label = QLabel("System Prompt:")
-        editor_system_prompt_header.addWidget(self.editor_system_prompt_checkbox)
-        editor_system_prompt_header.addWidget(editor_system_prompt_label)
-        editor_system_prompt_header.addStretch()
-        editor_layout.addLayout(editor_system_prompt_header)
+        # Create vertical splitter for system and user prompts
+        editor_splitter = QSplitter(Qt.Vertical)
         
-        # System prompt editor (40% height)
-        self.editor_system_prompt = QTextEdit()
-        self.editor_system_prompt.setVisible(self.editor_system_prompt_visible)
-        self.editor_system_prompt.setMinimumHeight(120)  # 40% of 300px total
-        self.editor_system_prompt.setStyleSheet("""
+        # System prompt editor
+        self.system_prompt = ExpandableTextWidget()
+        self.system_prompt.setVisible(self.settings.value("system_prompt_visible", False, bool))
+        self.system_prompt.setMinimumHeight(120)  # Initial height
+        self.system_prompt.setStyleSheet("""
             QTextEdit {
                 padding: 16px;  
                 background: #F5F5F5;
                 border: 1px solid #CCCCCC;
             }
         """)
-        self.editor_system_prompt.setPlaceholderText("Enter an optional system prompt...")
-        editor_layout.addWidget(self.editor_system_prompt, 40)  # 40% stretch factor
-
-        # User prompt content editor (60% height)
-        self.editor_content_edit = QTextEdit()
-        self.editor_content_edit.setMinimumHeight(180)  # 60% of 300px total
-        self.editor_content_edit.setStyleSheet("""
+        self.system_prompt.setPlaceholderText("Enter an optional system prompt...")
+        
+        # User prompt editor
+        self.user_prompt = QTextEdit()
+        self.user_prompt.setMinimumHeight(180)
+        self.user_prompt.setStyleSheet("""
             QTextEdit {
-                padding: 16px;
+                padding: 16px;  
                 background: #F5F5F5;
                 border: 1px solid #CCCCCC;
             }
         """)
-        self.editor_content_edit.setPlaceholderText("Enter your prompt here...")
-        editor_layout.addWidget(self.editor_content_edit, 60)  # 60% stretch factor
-
+        self.user_prompt.setPlaceholderText("Enter your prompt here...")
+        
+        # Add editors to splitter
+        editor_splitter.addWidget(self.system_prompt)
+        editor_splitter.addWidget(self.user_prompt)
+        
+        # Set initial sizes (40% system, 60% user)
+        editor_splitter.setSizes([400, 600])
+        
+        # Store original heights for restoration
+        self.original_heights = {
+            'system_prompt': self.system_prompt.minimumHeight(),
+            'user_prompt': self.user_prompt.minimumHeight()
+        }
+        
+        # Connect expandable widget signals
+        self.system_prompt.expandedChanged.connect(self.toggle_compact_mode)
+        self.system_prompt.sizeChanged.connect(lambda: editor_splitter.setSizes(
+            [1800, 200] if self.system_prompt.is_expanded else [400, 600]
+        ))
+        
+        editor_layout.addWidget(editor_splitter)
+        
         # Save button
         save_btn = QPushButton("Save")
         save_btn.clicked.connect(self.save_prompt)
         editor_layout.addWidget(save_btn)
         
-        catalog_layout.addWidget(editor_widget)
+        catalog_layout.addWidget(editor_frame)
         catalog_layout.setStretch(0, 0)
         catalog_layout.setStretch(1, 1)
         catalog_layout.setSpacing(16)  # Consistent spacing
 
     def save_state(self):
         self.settings.setValue("left_panel_expanded", self.left_panel.expanded)
-        self.settings.setValue("editor_system_prompt_visible", self.editor_system_prompt_visible)
+        self.settings.setValue("system_prompt_visible", self.system_prompt_visible)
 
     def load_state(self):
         left_expanded = self.settings.value("left_panel_expanded", True, bool)
@@ -168,8 +188,8 @@ class PromptsCatalogWidget(QWidget):
     def create_new_prompt(self):
         self.current_prompt = None
         self.title_edit.clear()
-        self.editor_content_edit.clear()
-        self.editor_system_prompt.clear()
+        self.user_prompt.clear()
+        self.system_prompt.clear()
         self.type_combo.setCurrentIndex(0)
 
     @Slot()
@@ -178,8 +198,8 @@ class PromptsCatalogWidget(QWidget):
         
         prompt = Prompt(
             title=self.title_edit.text(),
-            user_prompt=self.editor_content_edit.toPlainText(),
-            system_prompt=self.editor_system_prompt.toPlainText() or None,  # Convert empty string to None
+            user_prompt=self.user_prompt.toPlainText(),
+            system_prompt=self.system_prompt.toPlainText() or None,  # Convert empty string to None
             prompt_type=PromptType(self.type_combo.currentText()),
             created_at=datetime.now() if self.current_prompt is None else self.current_prompt.created_at,
             updated_at=datetime.now(),
@@ -217,15 +237,15 @@ class PromptsCatalogWidget(QWidget):
                 selected_prompt = self._prompts[index]
                 self.current_prompt = selected_prompt
                 self.title_edit.setText(selected_prompt.title)
-                self.editor_content_edit.setPlainText(selected_prompt.user_prompt)
+                self.user_prompt.setPlainText(selected_prompt.user_prompt)
                 if selected_prompt.system_prompt:
-                    self.editor_system_prompt.setPlainText(selected_prompt.system_prompt)
-                    self.editor_system_prompt_checkbox.setChecked(True)
-                    self.editor_system_prompt.setVisible(True)
+                    self.system_prompt.setPlainText(selected_prompt.system_prompt)
+                    self.system_prompt_checkbox.setChecked(True)
+                    self.system_prompt.setVisible(True)
                 else:
-                    self.editor_system_prompt.clear()
-                    self.editor_system_prompt_checkbox.setChecked(False)
-                    self.editor_system_prompt.setVisible(False)
+                    self.system_prompt.clear()
+                    self.system_prompt_checkbox.setChecked(False)
+                    self.system_prompt.setVisible(False)
                 self.type_combo.setCurrentText(selected_prompt.prompt_type.value)
                 # Emit signal when a prompt is selected
                 self.prompt_selected_for_eval.emit(current, previous)
@@ -238,9 +258,26 @@ class PromptsCatalogWidget(QWidget):
             item.setHidden(search_text not in item.text().lower())
 
     @Slot()
-    def toggle_editor_system_prompt(self):
-        self.editor_system_prompt_visible = self.editor_system_prompt_checkbox.isChecked()
-        self.editor_system_prompt.setVisible(self.editor_system_prompt_visible)
+    def toggle_system_prompt(self):
+        self.system_prompt_visible = self.system_prompt_checkbox.isChecked()
+        self.system_prompt.setVisible(self.system_prompt_visible)
+
+    @Slot()
+    def toggle_compact_mode(self, expanded):
+        """Toggle between compact and normal mode for the user prompt"""
+        if expanded:
+            # Compact mode for user prompt
+            self.user_prompt.setMinimumHeight(40)
+            self.user_prompt.setMaximumHeight(60)
+            
+            # Update placeholder for better visibility in compact mode
+            if self.user_prompt.toPlainText():
+                self.user_prompt.setPlaceholderText("User: " + self.user_prompt.toPlainText()[:50] + "...")
+        else:
+            # Normal mode
+            self.user_prompt.setMinimumHeight(self.original_heights['user_prompt'])
+            self.user_prompt.setMaximumHeight(16777215)  # Qt's QWIDGETSIZE_MAX
+            self.user_prompt.setPlaceholderText("Enter your prompt here...")
 
     @Slot()
     def show_context_menu(self, position):

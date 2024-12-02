@@ -17,6 +17,7 @@ class PromptsCatalogWidget(QWidget):
         self.settings = settings
         self._prompts = []
         self.current_prompt = None
+        self.system_prompt_visible = self.settings.value("system_prompt_visible", False, bool)
         self.setup_ui()
         self.load_prompts()
 
@@ -108,7 +109,7 @@ class PromptsCatalogWidget(QWidget):
         # System prompt header
         system_prompt_header = QHBoxLayout()
         self.system_prompt_checkbox = QCheckBox()
-        self.system_prompt_checkbox.setChecked(self.settings.value("system_prompt_visible", False, bool))
+        self.system_prompt_checkbox.setChecked(self.system_prompt_visible)
         self.system_prompt_checkbox.stateChanged.connect(self.toggle_system_prompt)
         system_prompt_label = QLabel("System Prompt:")
         system_prompt_header.addWidget(self.system_prompt_checkbox)
@@ -121,7 +122,7 @@ class PromptsCatalogWidget(QWidget):
         
         # System prompt editor
         self.system_prompt = ExpandableTextWidget()
-        self.system_prompt.setVisible(self.settings.value("system_prompt_visible", False, bool))
+        self.system_prompt.setVisible(self.system_prompt_visible)
         self.system_prompt.setMinimumHeight(120)  # Initial height
         self.system_prompt.setStyleSheet("""
             QTextEdit {

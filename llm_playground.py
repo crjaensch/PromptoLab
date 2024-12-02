@@ -5,11 +5,13 @@ from PySide6.QtCore import Qt, Slot
 from .collapsible_panel import CollapsiblePanel
 from .expandable_text import ExpandableTextWidget
 from .llm_utils import run_llm
+from .special_prompts import get_improvement_system_prompt
 
 class LLMPlaygroundWidget(QWidget):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
         self.settings = settings
+        self.improve_prompt_cmd = get_improvement_system_prompt()
         self.setup_ui()
         self.load_state()
 
@@ -80,10 +82,16 @@ class LLMPlaygroundWidget(QWidget):
         input_layout.setContentsMargins(0, 0, 0, 0)
         input_layout.addWidget(self.user_prompt)
         
-        # Run button
+        # Run and Improve Prompt buttons
+        button_layout = QHBoxLayout()
         run_btn = QPushButton("Run")
         run_btn.clicked.connect(self.run_playground)
-        input_layout.addWidget(run_btn)
+        improve_btn = QPushButton("Improve Prompt")
+        improve_btn.clicked.connect(self.improve_prompt)
+        button_layout.addWidget(run_btn)
+        button_layout.addWidget(improve_btn)
+        button_layout.addStretch()
+        input_layout.addLayout(button_layout)
         
         # Output area
         self.playground_output = ExpandableTextWidget()
@@ -162,6 +170,20 @@ class LLMPlaygroundWidget(QWidget):
             self.playground_output.setMarkdown(result)  # render markdown
         except Exception as e:
             self.playground_output.setPlainText(f"Error: {str(e)}")
+
+    @Slot()
+    def improve_prompt(self):
+        """Handle improve prompt button click."""
+        current_prompt = self.user_prompt.toPlainText()
+        if not current_prompt:
+            self.playground_output.setPlainText("Please enter a prompt to improve.")
+            return
+            
+        try:
+            improved_prompt = run_llm(current_prompt, self.improve_prompt_cmd, self.model_combo.currentText())
+            self.playground_output.setMarkdown(improved_prompt)
+        except Exception as e:
+            self.playground_output.setPlainText(f"Error improving prompt: {str(e)}")
 
     @Slot()
     def toggle_system_prompt(self):

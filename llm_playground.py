@@ -84,6 +84,7 @@ class LLMPlaygroundWidget(QWidget):
         
         # Run and Improve Prompt buttons
         button_layout = QHBoxLayout()
+        button_layout.addStretch()
         run_btn = QPushButton("Run")
         run_btn.clicked.connect(self.run_playground)
         improve_btn = QPushButton("Improve Prompt")

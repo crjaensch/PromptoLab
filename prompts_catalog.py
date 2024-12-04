@@ -159,9 +159,9 @@ class PromptsCatalogWidget(QWidget):
         }
         
         # Connect expandable widget signals
-        self.system_prompt.expandedChanged.connect(self.toggle_compact_mode)
+        self.system_prompt.expandedChanged.connect(lambda expanded: self.toggle_compact_mode(expanded) if self.system_prompt.isVisible() else None)
         self.system_prompt.sizeChanged.connect(lambda: editor_splitter.setSizes(
-            [1800, 200] if self.system_prompt.is_expanded else [400, 600]
+            [1800, 200] if self.system_prompt.is_expanded and self.system_prompt.isVisible() else [400, 600]
         ))
         
         editor_layout.addWidget(editor_splitter)
@@ -260,8 +260,13 @@ class PromptsCatalogWidget(QWidget):
 
     @Slot()
     def toggle_system_prompt(self):
+        """Toggle system prompt visibility and adjust UI accordingly."""
         self.system_prompt_visible = self.system_prompt_checkbox.isChecked()
         self.system_prompt.setVisible(self.system_prompt_visible)
+        
+        # Reset compact mode when hiding system prompt
+        if not self.system_prompt_visible and self.system_prompt.is_expanded:
+            self.toggle_compact_mode(False)
 
     @Slot()
     def toggle_compact_mode(self, expanded):

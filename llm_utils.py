@@ -35,3 +35,24 @@ def run_llm(user_prompt: str, system_prompt: Optional[str] = None, model: str = 
         error_msg = f"LLM execution failed: {e.stderr}"
         logger.error(error_msg)
         raise RuntimeError(error_msg)
+
+def run_embedding(text: str, embed_model: str = "3-large") -> str:
+    """Execute text using llm CLI tool."""
+    try:
+        cmd = ["llm", "embed", "-m", embed_model, "-c", text]
+        
+        # Log the command and input
+        logger.info("Running LLM command: %s", " ".join(cmd))
+        logger.info("Text: %s", text)
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        error_msg = f"LLM execution failed: {e.stderr}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)    

@@ -17,22 +17,27 @@ When implementing UI element groups that support expand/collapse functionality, 
   - Expanded: ChevronLeft icon (←)
 - When collapsed, the group width should be exactly 48px to accommodate the chevron button
 - The transition between states should be animated with a duration of 200ms
+- The Parameters panel should default to collapsed state on first launch
+- The Prompts panel should default to expanded state on first launch
 
 ### 2.2 State Persistence
 The application must maintain the following states between user sessions:
 - Expand/collapse states for all collapsible groups
 - The most recently selected prompt in the Prompts Catalog
 - All LLM parameter settings (Temperature, Max Tokens, Stream setting)
-- The selected LLM model
+- The selected LLM model and its settings
 - System Prompt visibility state and content
+- Panel expansion states for both Parameters and Prompts panels
 
 ### 2.3 Visual Styling Standards
 To maintain consistency across the application:
 - All text input areas must use 16px padding and a minimum height of 100px for multiline inputs
-- Visual borders around main interaction areas must use a light gray color (#E5E7EB) with 1px width
+- Visual borders around main interaction areas must use a light gray color (#CCCCCC) with 1px width
 - Spacing between major UI elements must be consistently 16px
 - Input fields must have a consistent height of 40px for single-line inputs
-- All interactive elements must show hover and focus states with a subtle background color change (#F3F4F6)
+- All interactive elements must show hover and focus states with a light gray background (#BBBBBB)
+- Text input areas must use a light gray background (#F5F5F5)
+- List items must show distinct hover and selection states with the same background color (#BBBBBB)
 
 ## 3. Prompts Catalog Implementation
 
@@ -63,6 +68,13 @@ The prompt editing area must implement the following behaviors:
 ### 4.1 Parameter Controls Group
 The left-side parameter group must:
 - Default to collapsed state on first application launch
+- Include a model selection dropdown with support for:
+  - gpt-4o-mini
+  - gpt-4o
+  - o1-mini
+  - o1-preview
+  - groq-llama3.1
+  - groq-llama3.3
 - Implement the Temperature slider with:
   - Range from 0 to 1
   - Step size of 0.1
@@ -77,17 +89,31 @@ The left-side parameter group must:
 The playground workspace must implement:
 
 #### System Prompt Section
-- The checkbox controls complete visibility of the System Prompt text area
+- A checkbox controls complete visibility of the System Prompt text area
 - The text area must animate smoothly when shown/hidden
 - When hidden, the space must collapse to prevent empty gaps in the layout
+- The system prompt must use the ExpandableTextWidget component for dynamic resizing
+- Default minimum height should be 120px
+- Must include placeholder text: "Enter an optional system prompt..."
 
 #### User Prompt Section
 - Must reflect the Current Prompt from the Prompts Catalog when specified
 - Must maintain a separate history of edits from the original prompt
 - Must provide a "Reset to Original" option when modified from a Current Prompt
+- Default minimum height should be 180px
+- Must include placeholder text: "Enter your prompt here..."
+
+#### Layout Management
+- Implement QSplitter components for flexible sizing of input/output areas
+- Default split ratios:
+  - Playground: 50/50 split (1000:1000 ratio)
+  - When output is expanded: 200:1800 ratio
+  - Prompts Catalog: 40/60 split for system/user prompts (400:600)
+  - When system prompt is expanded: 1800:200 ratio
 
 #### Response Handling
 The response area must:
+- Use the ExpandableTextWidget component for dynamic resizing
 - Render markdown formatting in real-time using a standard markdown parser
 - When streaming is enabled:
   - Show a typing indicator during response generation
@@ -97,6 +123,11 @@ The response area must:
 - Include a copy button in the top-right corner
 - Support syntax highlighting for code blocks
 - Maintain scroll position when content updates
+
+#### Button Layout
+- Center-align action buttons with proper spacing
+- Group "Run" and "Improve Prompt" buttons side by side
+- Maintain consistent 16px spacing between button groups
 
 #### Optimization Feature
 When the Optimize button is clicked:

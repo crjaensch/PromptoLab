@@ -25,7 +25,7 @@ class LLMPlaygroundWidget(QWidget):
         # Model selection
         model_layout = QHBoxLayout()
         self.model_combo = QComboBox()
-        self.model_combo.addItems(["gpt-4o-mini", "gpt-4o-2024-11-20", "o1-mini", "o1-preview", "groq-llama3", "claude-3.5-sonnet"])
+        self.model_combo.addItems(["gpt-4o-mini", "gpt-4o", "o1-mini", "o1-preview", "groq-llama3.1", "groq-llama3.3"])
         model_layout.addWidget(QLabel("Model:"))
         model_layout.addWidget(self.model_combo)
         params_content_layout.addLayout(model_layout)

@@ -175,6 +175,7 @@ class LLMPlaygroundWidget(QWidget):
     @Slot()
     def improve_prompt(self):
         """Handle improve prompt button click."""
+        model = self.model_combo.currentText()
         user_prompt = self.user_prompt.toPlainText()
         if not user_prompt:
             self.playground_output.setPlainText("Please enter a prompt to improve.")
@@ -188,7 +189,7 @@ class LLMPlaygroundWidget(QWidget):
                 if system_prompt.strip():
                     overall_prompt = f"<original_prompt>\nSystem: {system_prompt}\n\nUser: {user_prompt}\n</original_prompt>"
             
-            improved_prompt = run_llm(overall_prompt, self.improve_prompt_cmd, self.model_combo.currentText())
+            improved_prompt = run_llm(overall_prompt, self.improve_prompt_cmd, model)
             self.playground_output.setMarkdown(improved_prompt)
         except Exception as e:
             self.playground_output.setPlainText(f"Error improving prompt: {str(e)}")

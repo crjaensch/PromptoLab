@@ -5,13 +5,13 @@ from PySide6.QtCore import Qt, Slot
 from .collapsible_panel import CollapsiblePanel
 from .expandable_text import ExpandableTextWidget
 from .llm_utils import run_llm
-from .special_prompts import get_improvement_system_prompt
+from .special_prompts import get_prompt_improvement_prompt
 
 class LLMPlaygroundWidget(QWidget):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
         self.settings = settings
-        self.improve_prompt_cmd = get_improvement_system_prompt()
+        self.improve_prompt_cmd = get_prompt_improvement_prompt()
         self.setup_ui()
         self.load_state()
 
@@ -182,11 +182,11 @@ class LLMPlaygroundWidget(QWidget):
             
         try:
             # Combine system and user prompts if system prompt exists and is visible
-            overall_prompt = user_prompt
+            overall_prompt = f"<original_prompt>\n User: {user_prompt}\n</original_prompt>"
             if self.system_prompt_checkbox.isChecked() and self.system_prompt.isVisible():
                 system_prompt = self.system_prompt.toPlainText()
                 if system_prompt.strip():
-                    overall_prompt = f"System: {system_prompt}\n\nUser: {user_prompt}"
+                    overall_prompt = f"<original_prompt>\nSystem: {system_prompt}\n\nUser: {user_prompt}\n</original_prompt>"
             
             improved_prompt = run_llm(overall_prompt, self.improve_prompt_cmd, self.model_combo.currentText())
             self.playground_output.setMarkdown(improved_prompt)

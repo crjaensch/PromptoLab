@@ -1,61 +1,54 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget
-from PySide6.QtCore import QSettings, Slot
-from .storage import FileStorage
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QVBoxLayout
+from PySide6.QtCore import QSettings
 from .prompts_catalog import PromptsCatalogWidget
 from .llm_playground import LLMPlaygroundWidget
+from .test_set_manager import TestSetManagerWidget
 from .evaluation_widget import EvaluationWidget
+from .storage import FileStorage
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.storage = FileStorage()
-        self.settings = QSettings("Codeium", "PromptoLab")
-        self.setup_ui()
-        self.load_state()
-
-    def setup_ui(self):
         self.setWindowTitle("PromptoLab")
+        self.settings = QSettings("Codeium", "PromptoLab")
+        self.storage = FileStorage()
+        self.setup_ui()
+        
+    def setup_ui(self):
         self.setMinimumSize(1200, 800)
-
-        # Main layout
-        main_widget = QWidget()
-        self.setCentralWidget(main_widget)
-        main_layout = QVBoxLayout(main_widget)
         
-        # Tab widget at top left
-        self.tab_widget = QTabWidget()
-        self.tab_widget.setTabPosition(QTabWidget.North)
-        main_layout.addWidget(self.tab_widget)
+        # Create central widget and layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
         
-        # Create and add the Prompts Catalog tab
+        # Create tab widget
+        tabs = QTabWidget()
+        
+        # Create and add widgets to tabs
         self.prompts_catalog = PromptsCatalogWidget(self.storage, self.settings)
-        self.tab_widget.addTab(self.prompts_catalog, "Prompts Catalog")
-
-        # Create and add the LLM Playground tab
         self.llm_playground = LLMPlaygroundWidget(self.settings)
-        self.tab_widget.addTab(self.llm_playground, "LLM Playground")
-
-        # Create and add the Evaluation tab
-        self.evaluation_widget = EvaluationWidget()
-        self.tab_widget.addTab(self.evaluation_widget, "Eval Playground")
-
+        self.test_set_manager = TestSetManagerWidget(self.settings)
+        self.evaluation_widget = EvaluationWidget(self.settings)
+        
+        tabs.addTab(self.prompts_catalog, "Prompts Catalog")
+        tabs.addTab(self.llm_playground, "LLM Playground")
+        tabs.addTab(self.test_set_manager, "TestSet Manager")
+        tabs.addTab(self.evaluation_widget, "Eval Playground")
+        
+        layout.addWidget(tabs)
+        
         # Connect signals
+        self.test_set_manager.test_set_updated.connect(self.evaluation_widget.update_test_set)
         self.prompts_catalog.prompt_selected_for_eval.connect(self.on_prompt_selected_for_eval)
-
-    def save_state(self):
-        self.prompts_catalog.save_state()
-        self.llm_playground.save_state()
-
-    def load_state(self):
-        self.prompts_catalog.load_state()
-        self.llm_playground.load_state()
-
+        
     def closeEvent(self, event):
-        self.save_state()
-        super().closeEvent(event)
-
-    @Slot()
+        """Save settings when closing the window."""
+        self.settings.sync()
+        event.accept()
+        
     def on_prompt_selected_for_eval(self, current, previous):
+        """Handle when a prompt is selected for evaluation."""
         if not current:
             return
             

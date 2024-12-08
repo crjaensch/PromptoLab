@@ -39,7 +39,9 @@ def run_llm(user_prompt: str, system_prompt: Optional[str] = None, model: str = 
 def run_embedding(text: str, embed_model: str = "3-large") -> str:
     """Execute text using llm CLI tool."""
     try:
-        cmd = ["llm", "embed", "-m", embed_model, "-c", text]
+        # Escape any single quotes in the text and wrap in single quotes for llm CLI
+        escaped_text = text.replace("'", "'\"'\"'")
+        cmd = ["llm", "embed", "-m", embed_model, "-c", "'" + escaped_text + "'"]
         
         # Log the command and input
         logger.info("Running LLM command: %s", " ".join(cmd))

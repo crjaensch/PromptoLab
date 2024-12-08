@@ -6,18 +6,28 @@ import nltk
 import json
 from .llm_utils import run_llm, run_embedding
 
-class DifferenceAnalysis(NamedTuple):
-    """Container for difference analysis results."""
-    diff_segments: List[Tuple[str, str, float]]  # (baseline, proposed, similarity)
-    key_changes: List[str]
-    similarity_breakdown: Dict[str, float]
+class AnalysisError(Exception):
+    """Base class for analysis errors"""
+    pass
+
+class LLMError(AnalysisError):
+    """Error during LLM operations"""
+    pass
+
+class SimilarityError(AnalysisError):
+    """Error during similarity computation"""
+    pass
 
 @dataclass
-class OutputAnalysis:
-    semantic_similarity: float
+class AnalysisResult:
+    """Container for a single analysis result."""
+    input_text: str
+    baseline_output: str
+    current_output: str
+    similarity_score: float
     llm_grade: str
-    detailed_feedback: str
-    sentence_similarities: Dict[str, float]
+    llm_feedback: str
+    key_changes: List[str]
 
 class OutputAnalyzer:
     def __init__(self):
@@ -26,6 +36,9 @@ class OutputAnalyzer:
             nltk.data.find('tokenizers/punkt')
         except LookupError:
             nltk.download('punkt', quiet=True)
+            
+        # Initialize history
+        self.analysis_results: List[AnalysisResult] = []
 
     def _get_sentence_embeddings(self, text: str) -> tuple[np.ndarray, List[str]]:
         """Get embeddings for each sentence in the text."""
@@ -37,9 +50,7 @@ class OutputAnalyzer:
         
         embeddings = []
         for sentence in sentences:
-            # Get embedding for each sentence
             embedding_str = run_embedding(sentence, embed_model="3-small")
-            # The output is already in the format "[num1, num2, ...]", so we can eval it directly
             embedding = eval(embedding_str)  # Safe here since we know the format is a list of numbers
             embeddings.append(embedding)
         
@@ -48,17 +59,12 @@ class OutputAnalyzer:
     def _compute_semantic_similarity(self, baseline: str, current: str) -> tuple[float, Dict[str, float]]:
         """Compute semantic similarity between baseline and current outputs."""
         try:
-            # Get embeddings for both texts
             baseline_embeddings, baseline_sentences = self._get_sentence_embeddings(baseline)
             current_embeddings, current_sentences = self._get_sentence_embeddings(current)
             
-            # Compute similarity matrix
             similarity_matrix = cosine_similarity(baseline_embeddings, current_embeddings)
-            
-            # Overall similarity is the mean of the best matches
             overall_similarity = np.mean(np.max(similarity_matrix, axis=1))
             
-            # Create sentence-level similarity breakdown
             sentence_similarities = {}
             for i, base_sent in enumerate(baseline_sentences):
                 best_match_idx = np.argmax(similarity_matrix[i])
@@ -67,8 +73,7 @@ class OutputAnalyzer:
             return overall_similarity, sentence_similarities
             
         except Exception as e:
-            print(f"Error computing semantic similarity: {str(e)}")
-            return 0.0, {}
+            raise SimilarityError(f"Error computing semantic similarity: {str(e)}")
 
     def _get_llm_grade(self, user_prompt: str, baseline: str, current: str, model: str = "gpt-4o") -> tuple[str, str]:
         """Get LLM-based grade and feedback comparing baseline and current outputs."""
@@ -101,7 +106,6 @@ Please evaluate the current output compared to the baseline."""
                 model=model
             )
             
-            # Parse the result
             grade_line, *feedback_lines = result.split('\n')
             grade = grade_line.replace('Grade:', '').strip()
             feedback = '\n'.join(feedback_lines).strip()
@@ -109,61 +113,71 @@ Please evaluate the current output compared to the baseline."""
             return grade, feedback
             
         except Exception as e:
-            print(f"Error getting LLM grade: {str(e)}")
-            return "N/A", f"Failed to get LLM evaluation: {str(e)}"
+            raise LLMError(f"Error getting LLM evaluation: {str(e)}")
 
-    def analyze_differences(self, baseline: str, proposed: str) -> DifferenceAnalysis:
-        """Analyze differences between baseline and proposed outputs."""
-        if not baseline and not proposed:
-            return DifferenceAnalysis([], [], {"Overall": 0.0})
-
+    def analyze_test_case(self, input_text: str, baseline: str, current: str, model: str = "gpt-4o") -> AnalysisResult:
+        """Analyze a single test case and store the result."""
         try:
-            baseline_embeddings, baseline_sents = self._get_sentence_embeddings(baseline)
-            proposed_embeddings, proposed_sents = self._get_sentence_embeddings(proposed)
-
-            # Compute similarity matrix
-            similarity_matrix = cosine_similarity(baseline_embeddings, proposed_embeddings)
+            # Compute similarity
+            similarity, _ = self._compute_semantic_similarity(baseline, current)
             
-            # Overall similarity is the mean of the best matches
-            overall_similarity = float(np.mean(np.max(similarity_matrix, axis=1)))
+            # Get LLM grade and feedback
+            grade, feedback = self._get_llm_grade(input_text, baseline, current, model)
             
-            # Create sentence-level similarity breakdown
-            similarity_breakdown = {
-                "Overall": overall_similarity
-            }
-            
-            diff_segments = []
+            # Compute key changes
+            baseline_sents = nltk.sent_tokenize(baseline)
+            current_sents = nltk.sent_tokenize(current)
             key_changes = []
             
-            # For each baseline sentence, find the best matching proposed sentence
-            for i, (base_sent, similarities) in enumerate(zip(baseline_sents, similarity_matrix)):
-                best_match_idx = np.argmax(similarities)
-                best_similarity = similarities[best_match_idx]
-                prop_sent = proposed_sents[best_match_idx]
-                
-                similarity_breakdown[f"Segment {i+1}"] = float(best_similarity)
-                diff_segments.append((base_sent, prop_sent, best_similarity))
-                
-                if best_similarity < 0.8:  # Threshold for significant changes
-                    key_changes.append(f"Changed: '{base_sent}' → '{prop_sent}' (similarity: {best_similarity:.2f})")
+            # Simple diff for now - could be enhanced with more sophisticated comparison
+            if len(baseline_sents) != len(current_sents):
+                key_changes.append("Number of sentences changed")
+            for b_sent, c_sent in zip(baseline_sents, current_sents):
+                if b_sent != c_sent:
+                    key_changes.append(f"Changed: '{b_sent}' → '{c_sent}'")
             
-            return DifferenceAnalysis(diff_segments, key_changes, similarity_breakdown)
+            # Create and store result
+            result = AnalysisResult(
+                input_text=input_text,
+                baseline_output=baseline,
+                current_output=current,
+                similarity_score=similarity,
+                llm_grade=grade,
+                llm_feedback=feedback,
+                key_changes=key_changes
+            )
+            self.analysis_results.append(result)
+            return result
             
         except Exception as e:
-            print(f"Error analyzing differences: {str(e)}")
-            return DifferenceAnalysis([], [], {"Overall": 0.0})
+            raise AnalysisError(f"Error analyzing test case: {str(e)}")
 
-    def analyze_output(self, user_prompt: str, baseline: str, current: str, model: str = "gpt-4o") -> OutputAnalysis:
-        """Analyze the difference between baseline and current outputs using multiple metrics."""
-        # Get semantic similarity
-        semantic_similarity, sentence_similarities = self._compute_semantic_similarity(baseline, current)
+    def get_analysis_text(self, index: int) -> str:
+        """Get formatted analysis text for a specific result."""
+        if not 0 <= index < len(self.analysis_results):
+            return "No analysis available for this test case."
+            
+        result = self.analysis_results[index]
+        analysis_text = [
+            f"Overall Similarity: {result.similarity_score:.2f}",
+            "\nKey Changes:"
+        ]
         
-        # Get LLM-based grade
-        grade, feedback = self._get_llm_grade(user_prompt, baseline, current, model)
+        if result.key_changes:
+            for change in result.key_changes:
+                analysis_text.append(f"• {change}")
+        else:
+            analysis_text.append("No significant changes detected.")
+            
+        return "\n".join(analysis_text)
+
+    def get_feedback_text(self, index: int) -> str:
+        """Get feedback text for a specific result."""
+        if not 0 <= index < len(self.analysis_results):
+            return "No feedback available for this test case."
         
-        return OutputAnalysis(
-            semantic_similarity=semantic_similarity,
-            llm_grade=grade,
-            detailed_feedback=feedback,
-            sentence_similarities=sentence_similarities
-        )
+        return self.analysis_results[index].llm_feedback
+
+    def clear_history(self):
+        """Clear analysis history."""
+        self.analysis_results.clear()

@@ -160,5 +160,108 @@ The application must support efficient keyboard navigation:
 - Esc must cancel the current operation or close dialogs
 - Arrow keys must navigate through the prompt selection list
 
-## 7. Eval Playground
-The specific UI implementation for the Eval Playground remains to be defined, but it must maintain consistency with the established patterns and behaviors defined in this specification.
+## 7. Eval Playground Implementation
+
+### 7.1 Test Set Management
+The Test Set Manager must:
+- Provide a dedicated interface for creating and managing test sets
+- Include fields for:
+  - Test Set Name (required)
+  - System Prompt (optional, using ExpandableTextWidget)
+  - Test Cases table with columns:
+    - User Prompt
+    - Baseline Output
+- Support adding, editing, and removing test cases
+- Validate inputs before saving
+- Maintain persistence of test sets between sessions
+
+### 7.2 Evaluation Interface Layout
+The evaluation interface consists of:
+
+#### Test Set Selection Area
+- Dropdown for selecting test sets
+- Model selection dropdown with support for:
+  - gpt-4o-mini
+  - gpt-4o
+  - o1-mini
+  - o1-preview
+  - groq-llama3.1
+  - groq-llama3.3
+- System Prompt input using ExpandableTextWidget
+  - Default collapsed height: 35px
+  - Expanded height: 200px
+  - Placeholder text: "Enter the new system prompt to evaluate..."
+
+#### Results Table
+- Columns:
+  - User Prompt
+  - Baseline Output
+  - Current Output
+  - Semantic Similarity (numeric, 2 decimal places)
+  - LLM Grade (A-F scale)
+- Features:
+  - Auto-adjusting row heights for content
+  - Horizontal scrolling for long content
+  - Selection highlighting
+  - Column width optimization:
+    - Fixed width for numeric columns (Similarity: 100px, Grade: 80px)
+    - Flexible width for text columns
+
+#### Analysis Panel
+- Collapsible panel with toggle button (▼/▶)
+- Tab interface with:
+  - Semantic Analysis tab
+    - Shows detailed similarity breakdown
+    - Highlights key differences
+  - LLM Feedback tab
+    - Shows structured feedback
+    - Includes grade explanation
+- Read-only text areas for analysis display
+
+### 7.3 Evaluation Process
+The interface must support:
+- Progress indication during evaluation
+  - Progress bar showing current/total test cases
+  - Disable run button during evaluation
+- Real-time updates
+  - Update table as each test case completes
+  - Show analysis for selected test case
+- Error handling
+  - Clear error messages for LLM failures
+  - Proper recovery from network issues
+  - Option to retry failed evaluations
+
+### 7.4 Visual Feedback
+- Color-coding for grades (optional future enhancement)
+- Visual indicators for similarity scores
+- Clear differentiation between baseline and current outputs
+- Loading states during analysis
+- Error states for failed evaluations
+
+### 7.5 Interaction Patterns
+- Single-click row selection for viewing analysis
+- Double-click cell for copying content
+- Keyboard navigation support
+- Tab order:
+  1. Test Set dropdown
+  2. Model dropdown
+  3. System Prompt
+  4. Run button
+  5. Results table
+  6. Analysis tabs
+
+### 7.6 State Management
+Must persist:
+- Selected test set
+- Selected model
+- System prompt content
+- Analysis panel expansion state
+- Table column widths
+- Selected row index
+
+### 7.7 Performance Considerations
+- Efficient handling of large test sets
+- Smooth scrolling in results table
+- Responsive analysis updates
+- Proper cleanup of resources
+- Memory management for large outputs

@@ -39,13 +39,23 @@ class EvaluationWidget(QWidget):
         
         # Test Set Selection
         selector_layout = QHBoxLayout()
-        selector_layout.addWidget(QLabel("Test Set:"))
+        selector_layout.setSpacing(2)  # Reduce spacing between widgets
+        test_set_label = QLabel("Test Set:")
+        test_set_label.setFixedWidth(test_set_label.sizeHint().width())  # Set fixed width based on content
+        selector_layout.addWidget(test_set_label)
         self.test_set_combo = QComboBox()
         self.test_set_combo.currentIndexChanged.connect(self.load_selected_test_set)
         selector_layout.addWidget(self.test_set_combo)
         
+        # Add spacing between the pairs
+        spacer = QWidget()
+        spacer.setFixedWidth(20)  # 20px spacing
+        selector_layout.addWidget(spacer)
+        
         # Model Selection
-        selector_layout.addWidget(QLabel("Model:"))
+        model_label = QLabel("Model:")
+        model_label.setFixedWidth(model_label.sizeHint().width())  # Set fixed width based on content
+        selector_layout.addWidget(model_label)
         self.model_combo = QComboBox()
         self.model_combo.addItems(["gpt-4o-mini", "gpt-4o", "o1-mini", "gemini-2.0-flash-exp", "groq-llama3.3"])
         selector_layout.addWidget(self.model_combo)
@@ -108,10 +118,10 @@ class EvaluationWidget(QWidget):
         analysis_layout.setContentsMargins(0, 0, 0, 0)
         
         # Add collapse/expand button for analysis section
-        collapse_button = QPushButton("▼ Analysis")
-        collapse_button.setStyleSheet("text-align: left; padding: 5px;")
-        collapse_button.clicked.connect(self.toggle_analysis)
-        analysis_layout.addWidget(collapse_button)
+        self.collapse_button = QPushButton("▼ Analysis")
+        self.collapse_button.setStyleSheet("text-align: left; padding: 5px;")
+        self.collapse_button.clicked.connect(self.toggle_analysis)
+        analysis_layout.addWidget(self.collapse_button)
         
         # Analysis tabs
         self.analysis_tabs = QTabWidget()
@@ -298,12 +308,23 @@ class EvaluationWidget(QWidget):
                                "Please check the application logs for more details.")
             
     def toggle_analysis(self):
-        if self.analysis_widget.isVisible():
-            self.analysis_widget.hide()
-            self.sender().setText("▶ Analysis")
+        if self.analysis_tabs.isVisible():
+            # Store current sizes before hiding
+            self.last_sizes = self.main_splitter.sizes()
+            self.analysis_tabs.hide()
+            self.collapse_button.setText("▶ Analysis")
+            # Give all space to the upper section
+            self.main_splitter.setSizes([self.main_splitter.size().height() - self.collapse_button.height(), 
+                                       self.collapse_button.height()])
         else:
-            self.analysis_widget.show()
-            self.sender().setText("▼ Analysis")
+            self.analysis_tabs.show()
+            self.collapse_button.setText("▼ Analysis")
+            # Restore previous sizes if they exist
+            if hasattr(self, 'last_sizes'):
+                self.main_splitter.setSizes(self.last_sizes)
+            else:
+                # Default split if no previous sizes
+                self.main_splitter.setSizes([700, 300])
             
     def on_table_selection_changed(self):
         """Handle table selection changes by updating analysis displays."""

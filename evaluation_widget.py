@@ -47,7 +47,7 @@ class EvaluationWidget(QWidget):
         # Model Selection
         selector_layout.addWidget(QLabel("Model:"))
         self.model_combo = QComboBox()
-        self.model_combo.addItems(["gpt-4o-mini", "gpt-4o", "o1-mini", "o1-preview", "groq-llama3.1", "groq-llama3.3"])
+        self.model_combo.addItems(["gpt-4o-mini", "gpt-4o", "o1-mini", "gemini-2.0-flash-exp", "groq-llama3.3"])
         selector_layout.addWidget(self.model_combo)
         
         upper_layout.addLayout(selector_layout)

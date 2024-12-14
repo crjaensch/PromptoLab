@@ -4,6 +4,7 @@
 The PromptoLab UI consists of three main parts, each accessible through a tab control located at the top left of the main window:
 - **Prompts Catalog**
 - **LLM Playground**
+- **Test Set Manager**
 - **Eval Playground**
 
 ## 2. Global UI Guidelines and Behaviors
@@ -12,10 +13,15 @@ The PromptoLab UI consists of three main parts, each accessible through a tab co
 When implementing UI element groups that support expand/collapse functionality, the following rules apply:
 - In the collapsed state, all contents including headers must be hidden, with only the expand/collapse button remaining visible
 - The expand/collapse button must be positioned at the top-right of the group area
-- The button must use chevron icons from the Lucide icon set to indicate state:
-  - Collapsed: ChevronRight icon (→)
-  - Expanded: ChevronLeft icon (←)
-- When collapsed, the group width should be exactly 48px to accommodate the chevron button
+- The button design must follow these specifications:
+  - Square shape with slightly rounded corners (4px radius)
+  - Fixed size of 28x28 pixels
+  - Light gray background (#f8f8f8)
+  - Thin border (#e0e0e0, 1px)
+  - Plus/minus symbols using Arial font, 16px, ExtraBold weight
+  - Gray text color (#666666) with black (#000000) on hover
+  - Background lightens (#f0f0f0) and border darkens (#cccccc) on hover
+- When collapsed, the group width should be exactly 44px to accommodate the button + margins
 - The transition between states should be animated with a duration of 200ms
 - The Parameters panel should default to collapsed state on first launch
 - The Prompts panel should default to expanded state on first launch
@@ -39,10 +45,37 @@ To maintain consistency across the application:
 - Text input areas must use a light gray background (#F5F5F5)
 - List items must show distinct hover and selection states with the same background color (#BBBBBB)
 
+### 2.4 LLM Parameters and Model Selection
+The application provides consistent LLM parameter controls across all relevant interfaces:
+
+#### Model Selection
+- Available models are dynamically loaded from the `llm` command-line tool
+- Model dropdown appears in both LLM Playground and Eval Playground
+- Default model is "gpt-4o-mini" if model list cannot be loaded
+- Model list is synchronized between all interfaces using the same model
+
+#### Optional LLM Parameters
+The following parameters are optional and synchronized across interfaces:
+- **Temperature**: Floating-point value for response randomness
+  - Empty option available as default
+  - Common values: 0.0, 0.3, 0.5, 0.7, 0.9, 1.0
+- **Max Tokens**: Integer value for response length limit
+  - Empty option available as default
+  - Common values: 512, 1024, 2048, 4096, 8192
+- **Top P**: Floating-point value for nucleus sampling
+  - Empty option available as default
+  - Common values: 0.1, 0.5, 0.7, 0.8, 0.9, 0.95, 1.0
+
+#### Parameter Persistence
+- All parameter values are stored in application settings
+- Values persist between sessions
+- Settings are shared between LLM Playground and Eval Playground
+- Empty selections are preserved and passed as None to the LLM
+
 ## 3. Prompts Catalog Implementation
 
-### 3.1 Left-Side Group
-The collapsible group on the left side must:
+### 3.1 Right-Side Group
+The collapsible group on the right side must:
 - Default to expanded state on first application launch
 - Include a search field that filters prompts in real-time as the user types
 - Present a prompt selection list where:
@@ -65,28 +98,42 @@ The prompt editing area must implement the following behaviors:
 
 ## 4. LLM Playground Implementation
 
-### 4.1 Parameter Controls Group
+### 4.1 Parameter Controls
 The left-side parameter group must:
 - Default to collapsed state on first application launch
 - Include a model selection dropdown with support for:
-  - gpt-4o-mini
-  - gpt-4o
-  - o1-mini
-  - o1-preview
-  - groq-llama3.1
-  - groq-llama3.3
-- Implement the Temperature slider with:
-  - Range from 0 to 1
-  - Step size of 0.1
-  - Visual indication of the current value
-  - Numerical input option for precise control
-- The Max Tokens field must:
-  - Accept only positive integers
-  - Show an error state for invalid inputs
-  - Provide a reasonable maximum limit based on the selected model
+  - All models supported by the "llm models" command-line tool
+  - Default model: "gpt-4o-mini"
+- Implement Temperature control using ComboBox:
+  - Empty option as default
+  - Predefined values: 0.0, 0.3, 0.5, 0.7, 0.9, 1.0
+  - Display empty selection as "undefined"
+- Implement Max Tokens control using ComboBox:
+  - Empty option as default
+  - Predefined values: 512, 1024, 2048, 4096, 8192
+  - Display empty selection as "undefined"
+- Implement Top P control using ComboBox:
+  - Empty option as default
+  - Predefined values: 0.1, 0.5, 0.7, 0.8, 0.9, 0.95, 1.0
+  - Display empty selection as "undefined"
+- All parameter controls must:
+  - Maintain state between sessions
+  - Share settings with other interfaces
+  - Support keyboard navigation
+  - Show clear visual indication of selected value
 
-### 4.2 Main Interaction Area
-The playground workspace must implement:
+### 4.2 Parameters Panel
+The collapsible Parameters panel must:
+- Default to collapsed state
+- When expanded, show:
+  - Model selection dropdown with dynamically loaded models
+  - Optional parameter controls:
+    - Temperature with empty default
+    - Max Tokens with empty default
+    - Top P with empty default
+  - System prompt toggle and input area
+- Maintain all settings in application state
+- Share settings with Eval Playground
 
 #### System Prompt Section
 - A checkbox controls complete visibility of the System Prompt text area
@@ -175,18 +222,20 @@ The Test Set Manager must:
 - Validate inputs before saving
 - Maintain persistence of test sets between sessions
 
-### 7.2 Evaluation Interface Layout
-The evaluation interface consists of:
+### 7.2 Control Panel
+Must include:
+- Test Set selection dropdown
+- Model selection dropdown (dynamically populated)
+- Optional LLM parameter controls:
+  - Temperature (empty default)
+  - Max Tokens (empty default)
+  - Top P (empty default)
+- System prompt input area
+- Run evaluation button
 
 #### Test Set Selection Area
 - Dropdown for selecting test sets
-- Model selection dropdown with support for:
-  - gpt-4o-mini
-  - gpt-4o
-  - o1-mini
-  - o1-preview
-  - groq-llama3.1
-  - groq-llama3.3
+- Model selection dropdown with support for all models supported by "llm models"
 - System Prompt input using ExpandableTextWidget
   - Default collapsed height: 35px
   - Expanded height: 200px
@@ -265,3 +314,56 @@ Must persist:
 - Responsive analysis updates
 - Proper cleanup of resources
 - Memory management for large outputs
+
+## 8. Test Set Manager Implementation
+
+### 8.1 Interface Layout
+The test set manager interface consists of:
+- Test set information section at the top
+- System prompt section
+- Test cases table
+- Action buttons at the bottom
+
+### 8.2 Test Set Information
+- Test set name input field
+- System prompt input using ExpandableTextWidget
+  - Initial height of 35px (2 lines)
+  - Expandable for longer prompts
+  - Placeholder text: "Enter system prompt here..."
+
+### 8.3 Test Cases Table
+- Two-column layout:
+  - User Prompt
+  - Baseline Output
+- Features:
+  - Horizontal header with column labels
+  - Automatic column width adjustment
+  - Vertical scrolling for many test cases
+  - Selection highlighting
+
+### 8.4 Action Buttons
+Horizontally arranged buttons for:
+- Add Test Case
+- Remove Selected
+- Generate Baseline
+- Save Test Set
+- Load Test Set
+
+### 8.5 Baseline Generation
+- Uses the same LLM parameters as playground
+- Shows progress dialog during generation
+- Supports cancellation
+- Provides error handling per test case
+- Uses shared settings for:
+  - Selected model
+  - Temperature
+  - Max tokens
+  - Top P
+
+### 8.6 State Management
+Must persist:
+- Test set name
+- System prompt
+- All test cases
+- Table column widths
+- Selected row index

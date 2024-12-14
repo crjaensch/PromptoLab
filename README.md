@@ -1,19 +1,19 @@
 # PromptoLab
 
-PromptoLab is a desktop application for testing, managing, and improving LLM prompts. It provides a playground for interactive prompt development and a test set manager for systematic prompt testing.
+PromptoLab is a cross-platform desktop application for cataloging, evaluating, testing, and improving LLM prompts. It provides a playground for interactive prompt development and a test set manager for systematic prompt testing.
 
 ## Features
 
 - **Prompt Catalog**: Create, edit, save, and select prompts for testing
-- **LLM Playground**: Interactive environment for testing prompts with real-time LLM responses
+- **LLM Playground**: Interactive environment for testing prompts with immediate LLM responses
 - **Test Set Manager**: Create and manage test sets for systematic prompt testing
-- **Eval Playground**: Evaluate LLM performance on test sets using semantic analysis and a LLM grader
+- **Eval Playground**: Evaluate LLM performance on test sets via text embeddings and LLM grading
 - **Customizable Parameters**: Fine-tune LLM parameters (temperature, max_tokens, top_p)
 - **System Prompts**: Support for system prompts to guide the LLM behavior
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - [llm](https://github.com/simonw/llm) command-line tool
   ```bash
   pip install llm
@@ -29,13 +29,13 @@ PromptoLab is a desktop application for testing, managing, and improving LLM pro
 
 2. Create and activate a virtual environment:
    ```bash
-   python -m venv venv
+   python3 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   python3 -m pip install -r requirements.txt
    ```
 
 ## Running the Application
@@ -47,7 +47,8 @@ PromptoLab is a desktop application for testing, managing, and improving LLM pro
 
 2. Run the application:
    ```bash
-   python -m promptolab
+   cd ..  # Move to the parent directory
+   python3 -m promptolab
    ```
 
 ## Usage
@@ -68,7 +69,7 @@ PromptoLab is a desktop application for testing, managing, and improving LLM pro
 ## Development
 
 The project uses:
-- PySide6 for the GUI
+- PySide6 for the GUI to enable cross-platform use
 - Simon Willison's `llm` tool for LLM interactions
 - Python's built-in `venv` for environment management
 

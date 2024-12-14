@@ -8,10 +8,14 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def run_llm(user_prompt: str, system_prompt: Optional[str] = None, model: str = "gpt-4o-mini") -> str:
+def run_llm(user_prompt: str, system_prompt: Optional[str] = None, model: str = "gpt-4o-mini",
+          temperature: float = 0.7, max_tokens: int = 2048, top_p: float = 0.9) -> str:
     """Execute prompt using llm CLI tool."""
     try:
-        cmd = ["llm", "-m", model]
+        cmd = ["llm", "-m", model,
+               "-o", "temperature", str(temperature),
+               "-o", "max_tokens", str(max_tokens),
+               "-o", "top_p", str(top_p)]
         if system_prompt is not None:
             # Escape any single quotes in the system prompt
             escaped_system_prompt = system_prompt.replace("'", "'\"'\"'")

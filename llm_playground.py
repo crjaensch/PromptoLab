@@ -18,21 +18,6 @@ class LLMPlaygroundWidget(QWidget):
     def setup_ui(self):
         playground_layout = QHBoxLayout(self)
         
-        # Parameters panel as collapsible
-        self.params_panel = CollapsiblePanel("Parameters")
-        params_content_layout = QVBoxLayout()
-        
-        # Model selection
-        model_layout = QHBoxLayout()
-        self.model_combo = QComboBox()
-        self.model_combo.addItems(["gpt-4o-mini", "gpt-4o", "o1-mini", "gemini-2.0-flash-exp", "groq-llama3.3"])
-        model_layout.addWidget(QLabel("Model:"))
-        model_layout.addWidget(self.model_combo)
-        params_content_layout.addLayout(model_layout)
-        
-        self.params_panel.content_layout.addLayout(params_content_layout)
-        playground_layout.addWidget(self.params_panel)
-
         # Main playground area
         playground_main = QWidget()
         playground_main_layout = QVBoxLayout(playground_main)
@@ -130,6 +115,54 @@ class LLMPlaygroundWidget(QWidget):
         playground_main_layout.addWidget(playground_splitter)
 
         playground_layout.addWidget(playground_main)
+        
+        # Parameters panel as collapsible (now on the right)
+        self.params_panel = CollapsiblePanel("Parameters")
+        self.params_panel.expanded = False  # Closed by default
+        params_content_layout = QVBoxLayout()
+        params_content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        # Model selection
+        model_layout = QHBoxLayout()
+        model_label = QLabel("Model:")
+        self.model_combo = QComboBox()
+        self.model_combo.addItems(["gpt-4o-mini", "gpt-4o", "o1-mini", "gemini-2.0-flash-exp", "groq-llama3.3"])
+        model_layout.addWidget(model_label)
+        model_layout.addWidget(self.model_combo)
+        params_content_layout.addLayout(model_layout)
+        
+        # Max tokens
+        max_tokens_layout = QHBoxLayout()
+        max_tokens_label = QLabel("Max Tokens:")
+        self.max_tokens_combo = QComboBox()
+        self.max_tokens_combo.addItems(["512", "1024", "2048", "4096", "8192"])
+        self.max_tokens_combo.setCurrentText("2048")
+        max_tokens_layout.addWidget(max_tokens_label)
+        max_tokens_layout.addWidget(self.max_tokens_combo)
+        params_content_layout.addLayout(max_tokens_layout)
+        
+        # Temperature
+        temperature_layout = QHBoxLayout()
+        temperature_label = QLabel("Temperature:")
+        self.temperature_combo = QComboBox()
+        self.temperature_combo.addItems(["0.0", "0.3", "0.5", "0.7", "0.9", "1.0"])
+        self.temperature_combo.setCurrentText("0.7")
+        temperature_layout.addWidget(temperature_label)
+        temperature_layout.addWidget(self.temperature_combo)
+        params_content_layout.addLayout(temperature_layout)
+        
+        # Top P
+        top_p_layout = QHBoxLayout()
+        top_p_label = QLabel("Top P:")
+        self.top_p_combo = QComboBox()
+        self.top_p_combo.addItems(["0.1", "0.5", "0.7", "0.8", "0.9", "0.95", "1.0"])
+        self.top_p_combo.setCurrentText("0.9")
+        top_p_layout.addWidget(top_p_label)
+        top_p_layout.addWidget(self.top_p_combo)
+        params_content_layout.addLayout(top_p_layout)
+        
+        self.params_panel.content_layout.addLayout(params_content_layout)
+        playground_layout.addWidget(self.params_panel)
         playground_layout.setSpacing(16)  # Consistent spacing
 
     def save_state(self):
@@ -137,11 +170,13 @@ class LLMPlaygroundWidget(QWidget):
         self.settings.setValue("playground_system_prompt_visible", self.system_prompt_visible)
         self.settings.setValue("selected_model", self.model_combo.currentText())
         self.settings.setValue("system_prompt_text", self.system_prompt.toPlainText())
+        self.settings.setValue("max_tokens", self.max_tokens_combo.currentText())
+        self.settings.setValue("temperature", self.temperature_combo.currentText())
+        self.settings.setValue("top_p", self.top_p_combo.currentText())
 
     def load_state(self):
-        params_expanded = self.settings.value("params_panel_expanded", True, bool)
-        if not params_expanded:
-            self.params_panel.toggle_panel()
+        params_expanded = self.settings.value("params_panel_expanded", False, bool)  
+        self.params_panel.expanded = params_expanded
             
         # Restore LLM settings
         model = self.settings.value("selected_model", "gpt-4o")
@@ -149,6 +184,15 @@ class LLMPlaygroundWidget(QWidget):
         
         system_prompt = self.settings.value("system_prompt_text", "")
         self.system_prompt.setPlainText(system_prompt)
+        
+        max_tokens = self.settings.value("max_tokens", "2048")
+        self.max_tokens_combo.setCurrentText(max_tokens)
+        
+        temperature = self.settings.value("temperature", "0.7")
+        self.temperature_combo.setCurrentText(temperature)
+        
+        top_p = self.settings.value("top_p", "0.9")
+        self.top_p_combo.setCurrentText(top_p)
 
     @Slot()
     def run_playground(self):
@@ -167,7 +211,12 @@ class LLMPlaygroundWidget(QWidget):
                 self.playground_output.setPlainText("Error: User prompt cannot be empty")
                 return
                 
-            result = run_llm(user_prompt_text, system_prompt_text, model)
+            max_tokens = int(self.max_tokens_combo.currentText())
+            temperature = float(self.temperature_combo.currentText())
+            top_p = float(self.top_p_combo.currentText())
+            
+            result = run_llm(user_prompt_text, system_prompt_text, model,
+                         temperature=temperature, max_tokens=max_tokens, top_p=top_p)
             self.playground_output.setMarkdown(result)  # render markdown
         except Exception as e:
             self.playground_output.setPlainText(f"Error: {str(e)}")

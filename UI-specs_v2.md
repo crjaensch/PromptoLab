@@ -177,13 +177,12 @@ The response area must:
 - Maintain consistent 16px spacing between button groups
 
 #### Optimization Feature
-When the Optimize button is clicked:
+When the Improve Prompt button is clicked:
 - Show a loading spinner in the button
 - Disable other controls during optimization
 - Present the improved prompt in the Response area with:
   - A clear "Improved User Prompt" markdown heading
   - Visual differentiation between the original and improved sections
-  - An "Apply Optimization" button to replace the current prompt with the improved version
 
 ## 5. Error Handling and Feedback
 The application must provide clear feedback for:
@@ -226,10 +225,6 @@ The Test Set Manager must:
 Must include:
 - Test Set selection dropdown
 - Model selection dropdown (dynamically populated)
-- Optional LLM parameter controls:
-  - Temperature (empty default)
-  - Max Tokens (empty default)
-  - Top P (empty default)
 - System prompt input area
 - Run evaluation button
 

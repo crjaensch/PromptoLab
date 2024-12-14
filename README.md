@@ -11,6 +11,22 @@ PromptoLab is a cross-platform desktop application for cataloging, evaluating, t
 - **Customizable Parameters**: Fine-tune LLM parameters (temperature, max_tokens, top_p)
 - **System Prompts**: Support for system prompts to guide the LLM behavior
 
+## Application Screenshots
+
+Here's a quick visual overview of PromptoLab's main features:
+
+### Prompts Catalog
+![Prompts Catalog for managing your prompt library](images/Prompts-Catalog-Screen.png)
+
+### LLM Playground
+![Interactive LLM Playground for prompt development](images/LLM-Playground-Screen.png)
+
+### Test Set Manager
+![Test Set Manager for systematic prompt test set definition](images/TestSet-Manager-Screen.png)
+
+### Eval Playground
+![Evaluation Playground for assessing prompt performance](images/Eval-Playground-Screen.png)
+
 ## Prerequisites
 
 - Python 3.10 or higher
@@ -77,4 +93,3 @@ The project uses:
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](license.md) file in the repository for the full license text.
-

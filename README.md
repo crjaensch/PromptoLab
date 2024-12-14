@@ -47,8 +47,9 @@ PromptoLab is a cross-platform desktop application for cataloging, evaluating, t
 
 2. Run the application:
    ```bash
-   cd ..  # Move to the parent directory
-   python3 -m promptolab
+   # If inside PromptoLab, then move to the parent directory
+   cd ..
+   python3 -m PromptoLab
    ```
 
 ## Usage

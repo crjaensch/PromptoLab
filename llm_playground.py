@@ -135,8 +135,8 @@ class LLMPlaygroundWidget(QWidget):
         max_tokens_layout = QHBoxLayout()
         max_tokens_label = QLabel("Max Tokens:")
         self.max_tokens_combo = QComboBox()
-        self.max_tokens_combo.addItems(["512", "1024", "2048", "4096", "8192"])
-        self.max_tokens_combo.setCurrentText("2048")
+        self.max_tokens_combo.addItems(["", "512", "1024", "2048", "4096", "8192"])
+        self.max_tokens_combo.setCurrentText("")
         max_tokens_layout.addWidget(max_tokens_label)
         max_tokens_layout.addWidget(self.max_tokens_combo)
         params_content_layout.addLayout(max_tokens_layout)
@@ -145,8 +145,8 @@ class LLMPlaygroundWidget(QWidget):
         temperature_layout = QHBoxLayout()
         temperature_label = QLabel("Temperature:")
         self.temperature_combo = QComboBox()
-        self.temperature_combo.addItems(["0.0", "0.3", "0.5", "0.7", "0.9", "1.0"])
-        self.temperature_combo.setCurrentText("0.7")
+        self.temperature_combo.addItems(["", "0.0", "0.3", "0.5", "0.7", "0.9", "1.0"])
+        self.temperature_combo.setCurrentText("")
         temperature_layout.addWidget(temperature_label)
         temperature_layout.addWidget(self.temperature_combo)
         params_content_layout.addLayout(temperature_layout)
@@ -155,8 +155,8 @@ class LLMPlaygroundWidget(QWidget):
         top_p_layout = QHBoxLayout()
         top_p_label = QLabel("Top P:")
         self.top_p_combo = QComboBox()
-        self.top_p_combo.addItems(["0.1", "0.5", "0.7", "0.8", "0.9", "0.95", "1.0"])
-        self.top_p_combo.setCurrentText("0.9")
+        self.top_p_combo.addItems(["", "0.1", "0.5", "0.7", "0.8", "0.9", "0.95", "1.0"])
+        self.top_p_combo.setCurrentText("")
         top_p_layout.addWidget(top_p_label)
         top_p_layout.addWidget(self.top_p_combo)
         params_content_layout.addLayout(top_p_layout)
@@ -179,19 +179,19 @@ class LLMPlaygroundWidget(QWidget):
         self.params_panel.expanded = params_expanded
             
         # Restore LLM settings
-        model = self.settings.value("selected_model", "gpt-4o")
+        model = self.settings.value("selected_model", "gpt-4o-mini", str)
         self.model_combo.setCurrentText(model)
         
-        system_prompt = self.settings.value("system_prompt_text", "")
+        system_prompt = self.settings.value("system_prompt_text", "", str)
         self.system_prompt.setPlainText(system_prompt)
         
-        max_tokens = self.settings.value("max_tokens", "2048")
+        max_tokens = self.settings.value("max_tokens", "", str)
         self.max_tokens_combo.setCurrentText(max_tokens)
         
-        temperature = self.settings.value("temperature", "0.7")
+        temperature = self.settings.value("temperature", "", str)
         self.temperature_combo.setCurrentText(temperature)
         
-        top_p = self.settings.value("top_p", "0.9")
+        top_p = self.settings.value("top_p", "", str)
         self.top_p_combo.setCurrentText(top_p)
 
     @Slot()
@@ -211,9 +211,10 @@ class LLMPlaygroundWidget(QWidget):
                 self.playground_output.setPlainText("Error: User prompt cannot be empty")
                 return
                 
-            max_tokens = int(self.max_tokens_combo.currentText())
-            temperature = float(self.temperature_combo.currentText())
-            top_p = float(self.top_p_combo.currentText())
+            # Convert parameters to the correct type only if they're provided
+            max_tokens = int(self.max_tokens_combo.currentText()) if self.max_tokens_combo.currentText() else None
+            temperature = float(self.temperature_combo.currentText()) if self.temperature_combo.currentText() else None
+            top_p = float(self.top_p_combo.currentText()) if self.top_p_combo.currentText() else None
             
             result = run_llm(user_prompt_text, system_prompt_text, model,
                          temperature=temperature, max_tokens=max_tokens, top_p=top_p)

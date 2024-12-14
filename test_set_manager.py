@@ -89,6 +89,16 @@ class TestSetManagerWidget(QWidget):
         # Get the model from settings or use default
         model = self.settings.value("default_model", "gpt-4o-mini", str)
         
+        # Get LLM parameters from settings
+        max_tokens = self.settings.value("max_tokens", "", str)
+        temperature = self.settings.value("temperature", "", str)
+        top_p = self.settings.value("top_p", "", str)
+        
+        # Convert parameters to correct type if they're provided
+        max_tokens = int(max_tokens) if max_tokens else None
+        temperature = float(temperature) if temperature else None
+        top_p = float(top_p) if top_p else None
+        
         progress = QProgressDialog("Generating baseline outputs...", "Cancel", 0, self.cases_table.rowCount(), self)
         progress.setWindowModality(Qt.WindowModal)
         
@@ -106,11 +116,14 @@ class TestSetManagerWidget(QWidget):
                     continue
                     
                 try:
-                    # Generate baseline using LLM
+                    # Generate baseline using LLM with optional parameters
                     baseline = run_llm(
                         user_prompt,
                         self.system_prompt.toPlainText(),
-                        model
+                        model,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=top_p
                     )
                     
                     # Update the baseline output in the table

@@ -1,13 +1,13 @@
 __pycache__/
+.promptolab
 *.py[cod]
 *$py.class
 .env
 .venv
-.promptolab
+.coverage
 env/
 venv/
 scratch/
-system_prompt_evaluator_poc.py
-scratchpad
+.pytest_cache
 *.log
 .DS_Store

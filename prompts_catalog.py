@@ -24,72 +24,6 @@ class PromptsCatalogWidget(QWidget):
     def setup_ui(self):
         catalog_layout = QHBoxLayout(self)
         
-        # Left panel as collapsible
-        self.left_panel = CollapsiblePanel("Prompts")
-        
-        # Create a frame for search and list controls
-        search_list_frame = QFrame()
-        search_list_frame.setFrameStyle(QFrame.StyledPanel)
-        search_list_frame.setStyleSheet("""
-            QFrame { 
-                border: 1px solid #CCCCCC; 
-                padding: 6px; 
-            }
-            QLineEdit, QListWidget { 
-                background: #F5F5F5;
-                border: 1px solid #CCCCCC;
-            }
-            QLabel { 
-                border: none;
-                background: transparent;
-            }
-        """)
-        search_list_layout = QVBoxLayout(search_list_frame)
-        search_list_layout.setSpacing(12)
-        
-        # Search box with label
-        search_label = QLabel("Search:")
-        search_list_layout.addWidget(search_label)
-        
-        self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Search prompts...")
-        self.search_box.setStyleSheet("""
-            QLineEdit {
-                padding: 8px;
-                background: #F5F5F5;
-                border: 1px solid #CCCCCC;
-            }
-        """)
-        self.search_box.textChanged.connect(self.filter_prompts)
-        search_list_layout.addWidget(self.search_box)
-
-        # Prompt list with label
-        prompts_label = QLabel("All Prompts:")
-        search_list_layout.addWidget(prompts_label)
-        
-        self.prompt_list = QListWidget()
-        self.prompt_list.currentItemChanged.connect(self.on_prompt_selected)
-        self.prompt_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.prompt_list.customContextMenuRequested.connect(self.show_context_menu)
-        self.prompt_list.setStyleSheet("""
-            QListWidget {
-                background: #F5F5F5;
-                border: 1px solid #CCCCCC;
-            }
-            QListWidget::item:hover { background: #BBBBBB; }
-            QListWidget::item:selected { background: #BBBBBB; }
-        """)
-        search_list_layout.addWidget(self.prompt_list)
-        
-        self.left_panel.content_layout.addWidget(search_list_frame)
-
-        # New prompt button
-        new_prompt_btn = QPushButton("New Prompt")
-        new_prompt_btn.clicked.connect(self.create_new_prompt)
-        self.left_panel.content_layout.addWidget(new_prompt_btn)
-        
-        catalog_layout.addWidget(self.left_panel)
-
         # Right panel (editor)
         editor_frame = QWidget()
         editor_layout = QVBoxLayout(editor_frame)
@@ -171,19 +105,87 @@ class PromptsCatalogWidget(QWidget):
         save_btn.clicked.connect(self.save_prompt)
         editor_layout.addWidget(save_btn)
         
+        # Add editor frame to main layout first (on the left)
         catalog_layout.addWidget(editor_frame)
-        catalog_layout.setStretch(0, 0)
-        catalog_layout.setStretch(1, 1)
+        
+        # Prompts panel as collapsible (on the right)
+        self.prompts_panel = CollapsiblePanel("Prompts")
+        
+        # Create a frame for search and list controls
+        search_list_frame = QFrame()
+        search_list_frame.setFrameStyle(QFrame.StyledPanel)
+        search_list_frame.setStyleSheet("""
+            QFrame { 
+                border: 1px solid #CCCCCC; 
+                padding: 6px; 
+            }
+            QLineEdit, QListWidget { 
+                background: #F5F5F5;
+                border: 1px solid #CCCCCC;
+            }
+            QLabel { 
+                border: none;
+                background: transparent;
+            }
+        """)
+        search_list_layout = QVBoxLayout(search_list_frame)
+        search_list_layout.setSpacing(12)
+        
+        # Search box with label
+        search_label = QLabel("Search:")
+        search_list_layout.addWidget(search_label)
+        
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("Search prompts...")
+        self.search_box.setStyleSheet("""
+            QLineEdit {
+                padding: 8px;
+                background: #F5F5F5;
+                border: 1px solid #CCCCCC;
+            }
+        """)
+        self.search_box.textChanged.connect(self.filter_prompts)
+        search_list_layout.addWidget(self.search_box)
+
+        # Prompt list with label
+        prompts_label = QLabel("All Prompts:")
+        search_list_layout.addWidget(prompts_label)
+        
+        self.prompt_list = QListWidget()
+        self.prompt_list.currentItemChanged.connect(self.on_prompt_selected)
+        self.prompt_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.prompt_list.customContextMenuRequested.connect(self.show_context_menu)
+        self.prompt_list.setStyleSheet("""
+            QListWidget {
+                background: #F5F5F5;
+                border: 1px solid #CCCCCC;
+            }
+            QListWidget::item:hover { background: #BBBBBB; }
+            QListWidget::item:selected { background: #BBBBBB; }
+        """)
+        search_list_layout.addWidget(self.prompt_list)
+        
+        self.prompts_panel.content_layout.addWidget(search_list_frame)
+
+        # New prompt button
+        new_prompt_btn = QPushButton("New Prompt")
+        new_prompt_btn.clicked.connect(self.create_new_prompt)
+        self.prompts_panel.content_layout.addWidget(new_prompt_btn)
+        
+        # Add prompts panel to main layout last (on the right)
+        catalog_layout.addWidget(self.prompts_panel)
+        catalog_layout.setStretch(0, 1)
+        catalog_layout.setStretch(1, 0)
         catalog_layout.setSpacing(16)  # Consistent spacing
 
     def save_state(self):
-        self.settings.setValue("left_panel_expanded", self.left_panel.expanded)
+        self.settings.setValue("prompts_panel_expanded", self.prompts_panel.expanded)
         self.settings.setValue("system_prompt_visible", self.system_prompt_visible)
 
     def load_state(self):
-        left_expanded = self.settings.value("left_panel_expanded", True, bool)
-        if not left_expanded:
-            self.left_panel.toggle_panel()
+        prompts_expanded = self.settings.value("prompts_panel_expanded", True, bool)
+        if not prompts_expanded:
+            self.prompts_panel.toggle_panel()
 
     @Slot()
     def create_new_prompt(self):

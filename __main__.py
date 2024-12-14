@@ -1,4 +1,3 @@
-# prompt_nanny/__main__.py
 import sys
 from pathlib import Path
 

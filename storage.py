@@ -1,4 +1,3 @@
-# prompt_nanny/storage.py
 import json
 from pathlib import Path
 import sys

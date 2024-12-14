@@ -1,8 +1,15 @@
 # prompt_nanny/test_storage.py
 from pathlib import Path
+import sys
 import json
 from typing import Optional, List
-from .models import TestSet
+
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from models import TestSet
 
 class TestSetStorage:
     def __init__(self, base_dir: str = "test_sets"):

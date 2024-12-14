@@ -1,15 +1,22 @@
+from datetime import datetime
+import uuid
+from pathlib import Path
+import sys
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTableWidget, QTableWidgetItem, QTextEdit, 
                               QComboBox, QLabel, QLineEdit, QMessageBox,
                               QHeaderView, QDialog, QDialogButtonBox, QProgressDialog)
 from PySide6.QtCore import Qt, Signal
 
-from .models import TestSet, TestCase
-from .test_storage import TestSetStorage
-from .llm_utils import run_llm
-from .expandable_text import ExpandableTextWidget
-from datetime import datetime
-import uuid
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from models import TestSet, TestCase
+from test_storage import TestSetStorage
+from llm_utils import run_llm
+from expandable_text import ExpandableTextWidget
 
 class TestSetManagerWidget(QWidget):
     test_set_updated = Signal(TestSet)  # Emitted when test set is modified

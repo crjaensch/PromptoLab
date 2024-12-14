@@ -1,12 +1,19 @@
 # prompt_nanny/storage.py
 import json
 from pathlib import Path
+import sys
 from typing import List, Optional
 from datetime import datetime
 import uuid
 import re
 import logging
-from .models import Prompt, PromptType
+
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from models import Prompt, PromptType
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

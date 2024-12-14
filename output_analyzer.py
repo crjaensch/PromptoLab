@@ -1,10 +1,18 @@
 from dataclasses import dataclass
+from pathlib import Path
+import sys
 from typing import Optional, Dict, List, Tuple, NamedTuple
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import nltk
 import json
-from .llm_utils import run_llm, run_embedding
+
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from llm_utils import run_llm, run_embedding
 
 class AnalysisError(Exception):
     """Base class for analysis errors"""

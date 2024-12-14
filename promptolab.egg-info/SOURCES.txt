@@ -1,0 +1,12 @@
+README.md
+setup.py
+promptolab.egg-info/PKG-INFO
+promptolab.egg-info/SOURCES.txt
+promptolab.egg-info/dependency_links.txt
+promptolab.egg-info/requires.txt
+promptolab.egg-info/top_level.txt
+tests/__init__.py
+tests/conftest.py
+tests/test_models.py
+tests/test_prompts_catalog.py
+tests/test_storage.py

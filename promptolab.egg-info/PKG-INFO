@@ -1,0 +1,4 @@
+Metadata-Version: 2.1
+Name: promptolab
+Version: 0.1
+Requires-Dist: PySide6>=6.8.0

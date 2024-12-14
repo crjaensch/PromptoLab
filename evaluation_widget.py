@@ -1,3 +1,8 @@
+
+from datetime import datetime
+from pathlib import Path
+import sys
+from typing import List, Dict, Optional, Tuple
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QComboBox, QPushButton, QTextEdit, QProgressBar,
                                QTableWidget, QTableWidgetItem, QMessageBox,
@@ -6,15 +11,17 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
-from .models import TestSet
-from .test_storage import TestSetStorage
-from .output_analyzer import (OutputAnalyzer, AnalysisResult, AnalysisError,
-                            LLMError, SimilarityError)
-from .llm_utils import run_llm, get_llm_models
-from .expandable_text import ExpandableTextWidget
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-from datetime import datetime
-from typing import List, Dict, Optional, Tuple
+from models import TestSet
+from test_storage import TestSetStorage
+from output_analyzer import (OutputAnalyzer, AnalysisResult, AnalysisError,
+                            LLMError, SimilarityError)
+from llm_utils import run_llm, get_llm_models
+from expandable_text import ExpandableTextWidget
 
 class EvaluationWidget(QWidget):
     def __init__(self, settings, parent=None):

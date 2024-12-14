@@ -1,10 +1,18 @@
+import sys
+from pathlib import Path
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QVBoxLayout
 from PySide6.QtCore import QSettings
-from .prompts_catalog import PromptsCatalogWidget
-from .llm_playground import LLMPlaygroundWidget
-from .test_set_manager import TestSetManagerWidget
-from .evaluation_widget import EvaluationWidget
-from .storage import FileStorage
+
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from prompts_catalog import PromptsCatalogWidget
+from llm_playground import LLMPlaygroundWidget
+from test_set_manager import TestSetManagerWidget
+from evaluation_widget import EvaluationWidget
+from storage import FileStorage
 
 class MainWindow(QMainWindow):
     def __init__(self):

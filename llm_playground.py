@@ -1,11 +1,19 @@
+from pathlib import Path
+import sys
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTextEdit, QComboBox, QLabel, QSplitter,
                               QCheckBox)
 from PySide6.QtCore import Qt, Slot
-from .collapsible_panel import CollapsiblePanel
-from .expandable_text import ExpandableTextWidget
-from .llm_utils import run_llm, get_llm_models
-from .special_prompts import get_prompt_improvement_prompt
+
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from expandable_text import ExpandableTextWidget
+from llm_utils import run_llm, get_llm_models
+from special_prompts import get_prompt_improvement_prompt
+from collapsible_panel import CollapsiblePanel
 
 class LLMPlaygroundWidget(QWidget):
     def __init__(self, settings, parent=None):

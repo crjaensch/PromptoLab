@@ -1,12 +1,20 @@
+from pathlib import Path
+import sys
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QLineEdit, QTextEdit, QComboBox, QListWidget,
                               QLabel, QFrame, QListWidgetItem, QCheckBox,
                               QMenu, QMessageBox, QSplitter)
 from PySide6.QtCore import Qt, Signal, Slot
 from datetime import datetime
-from .models import Prompt, PromptType
-from .collapsible_panel import CollapsiblePanel
-from .expandable_text import ExpandableTextWidget
+
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from models import Prompt, PromptType
+from collapsible_panel import CollapsiblePanel
+from expandable_text import ExpandableTextWidget
 
 class PromptsCatalogWidget(QWidget):
     prompt_selected_for_eval = Signal(QListWidgetItem, QListWidgetItem)

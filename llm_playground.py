@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 from PySide6.QtCore import Qt, Slot
 from .collapsible_panel import CollapsiblePanel
 from .expandable_text import ExpandableTextWidget
-from .llm_utils import run_llm
+from .llm_utils import run_llm, get_llm_models
 from .special_prompts import get_prompt_improvement_prompt
 
 class LLMPlaygroundWidget(QWidget):
@@ -126,7 +126,13 @@ class LLMPlaygroundWidget(QWidget):
         model_layout = QHBoxLayout()
         model_label = QLabel("Model:")
         self.model_combo = QComboBox()
-        self.model_combo.addItems(["gpt-4o-mini", "gpt-4o", "o1-mini", "gemini-2.0-flash-exp", "groq-llama3.3"])
+        # Get available models dynamically
+        available_models = get_llm_models()
+        if available_models:
+            self.model_combo.addItems(available_models)
+        else:
+            # Fallback to default model if we can't get the list
+            self.model_combo.addItems(["gpt-4o-mini"])
         model_layout.addWidget(model_label)
         model_layout.addWidget(self.model_combo)
         params_content_layout.addLayout(model_layout)

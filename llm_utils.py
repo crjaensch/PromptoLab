@@ -70,3 +70,33 @@ def run_embedding(text: str, embed_model: str = "3-large") -> str:
         error_msg = f"LLM execution failed: {e.stderr}"
         logger.error(error_msg)
         raise RuntimeError(error_msg)    
+
+def get_llm_models() -> list[str]:
+    """Get list of available LLM models by running 'llm models' command.
+    
+    Returns:
+        list[str]: List of model names, stripped of aliases and descriptions
+    """
+    try:
+        result = subprocess.run(['llm', 'models'], 
+                              capture_output=True, 
+                              text=True, 
+                              check=True)
+        
+        models = []
+        for line in result.stdout.splitlines():
+            if ':' in line:  # Only process lines that have a colon
+                # Get the part after the first colon
+                model_part = line.split(':', 1)[1].strip()
+                # If there are aliases (indicated by parentheses), only take the part before them
+                if '(' in model_part:
+                    model_part = model_part.split('(')[0].strip()
+                models.append(model_part)
+                
+        return models
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error running 'llm models': {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error getting LLM models: {e}")
+        return []

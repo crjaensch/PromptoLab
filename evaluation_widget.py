@@ -10,7 +10,7 @@ from .models import TestSet
 from .test_storage import TestSetStorage
 from .output_analyzer import (OutputAnalyzer, AnalysisResult, AnalysisError,
                             LLMError, SimilarityError)
-from .llm_utils import run_llm
+from .llm_utils import run_llm, get_llm_models
 from .expandable_text import ExpandableTextWidget
 
 from datetime import datetime
@@ -57,7 +57,13 @@ class EvaluationWidget(QWidget):
         model_label.setFixedWidth(model_label.sizeHint().width())  # Set fixed width based on content
         selector_layout.addWidget(model_label)
         self.model_combo = QComboBox()
-        self.model_combo.addItems(["gpt-4o-mini", "gpt-4o", "o1-mini", "gemini-2.0-flash-exp", "groq-llama3.3"])
+        # Get available models dynamically
+        available_models = get_llm_models()
+        if available_models:
+            self.model_combo.addItems(available_models)
+        else:
+            # Fallback to default model if we can't get the list
+            self.model_combo.addItems(["gpt-4o-mini"])
         selector_layout.addWidget(self.model_combo)
         
         upper_layout.addLayout(selector_layout)

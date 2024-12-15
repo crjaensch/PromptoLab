@@ -4,8 +4,8 @@ from pathlib import Path
 import sys
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTableWidget, QTableWidgetItem, QTextEdit, 
-                              QComboBox, QLabel, QLineEdit, QMessageBox,
-                              QHeaderView, QDialog, QDialogButtonBox, QProgressDialog)
+                              QComboBox, QLabel, QLineEdit, QHeaderView, QDialog, 
+                              QDialogButtonBox, QProgressDialog)
 from PySide6.QtCore import Qt, Signal
 
 # Add the project root directory to Python path
@@ -76,6 +76,12 @@ class TestSetManagerWidget(QWidget):
         self.save_btn.clicked.connect(self.save_test_set)
         self.load_btn.clicked.connect(self.load_test_set)
         
+    def show_status(self, message, timeout=5000):
+        """Show a message in the status bar."""
+        main_window = self.window()
+        if main_window is not self and main_window and hasattr(main_window, 'show_status'):
+            main_window.show_status(message, timeout)
+            
     def add_test_case(self):
         row = self.cases_table.rowCount()
         self.cases_table.insertRow(row)
@@ -89,14 +95,16 @@ class TestSetManagerWidget(QWidget):
             
     def generate_baseline(self):
         """Generate baseline outputs for all test cases using the LLM."""
-        if not self.system_prompt.toPlainText().strip():
-            QMessageBox.warning(self, "Error", "Please enter a system prompt first")
+        if self.cases_table.rowCount() == 0:
+            self.show_status("No test cases to generate baselines for.", 5000)
             return
             
-        # Get the model from settings or use default
-        model = self.settings.value("default_model", "gpt-4o-mini", str)
-        
-        # Get LLM parameters from settings
+        # Get model and parameters from settings
+        model = self.settings.value("selected_model", "gpt-4o-mini", str)
+        if not model:
+            self.show_status("No model selected in settings.", 5000)
+            return
+            
         max_tokens = self.settings.value("max_tokens", "", str)
         temperature = self.settings.value("temperature", "", str)
         top_p = self.settings.value("top_p", "", str)
@@ -137,21 +145,17 @@ class TestSetManagerWidget(QWidget):
                     self.cases_table.setItem(row, 1, QTableWidgetItem(baseline))
                     
                 except Exception as e:
-                    QMessageBox.warning(
-                        self,
-                        "Error",
-                        f"Failed to generate baseline for row {row + 1}: {str(e)}"
-                    )
+                    self.show_status(f"Failed to generate baseline for row {row + 1}: {str(e)}", 7000)
                     
             progress.setValue(self.cases_table.rowCount())
-            QMessageBox.information(self, "Success", "Baseline generation completed!")
+            self.show_status("Baseline generation completed successfully!", 5000)
             
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to generate baselines: {str(e)}")
+            self.show_status(f"Failed to generate baselines: {str(e)}", 7000)
             
     def save_test_set(self):
         if not self.name_input.text().strip():
-            QMessageBox.warning(self, "Error", "Please enter a test set name")
+            self.show_status("Please enter a test set name", 5000)
             return
             
         test_cases = []
@@ -178,26 +182,24 @@ class TestSetManagerWidget(QWidget):
             self.test_storage.save_test_set(test_set)
             self.current_test_set = test_set
             self.test_set_updated.emit(test_set)
-            QMessageBox.information(self, "Success", "Test set saved successfully!")
+            self.show_status("Test set saved successfully!", 5000)
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save test set: {str(e)}")
+            self.show_status(f"Failed to save test set: {str(e)}", 7000)
             
     def load_test_set(self):
         """Load a test set from storage."""
         # Get list of available test sets
-        test_set_names = self.test_storage.get_all_test_sets()
-        if not test_set_names:
-            QMessageBox.information(self, "Info", "No test sets available to load")
+        test_sets = self.test_storage.get_all_test_sets()
+        if not test_sets:
+            self.show_status("No test sets available to load.", 5000)
             return
-
-        # Create dialog to select test set
+            
         dialog = QDialog(self)
-        dialog.setWindowTitle("Select Test Set")
+        dialog.setWindowTitle("Load Test Set")
         layout = QVBoxLayout(dialog)
         
-        # Add combo box with test set names
         combo = QComboBox()
-        combo.addItems(test_set_names)
+        combo.addItems(test_sets)
         layout.addWidget(combo)
         
         # Add buttons
@@ -226,9 +228,9 @@ class TestSetManagerWidget(QWidget):
                 
                 self.current_test_set = test_set
                 self.test_set_updated.emit(test_set)
-                QMessageBox.information(self, "Success", f"Test set '{selected_name}' loaded successfully!")
+                self.show_status(f"Test set '{selected_name}' loaded successfully!", 5000)
             else:
-                QMessageBox.critical(self, "Error", f"Failed to load test set '{selected_name}'")
+                self.show_status(f"Failed to load test set '{selected_name}'", 7000)
                 
     def clear(self):
         """Clear all inputs and reset the form."""

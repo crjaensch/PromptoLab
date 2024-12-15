@@ -46,6 +46,9 @@ class MainWindow(QMainWindow):
         
         layout.addWidget(tabs)
         
+        # Create status bar
+        self.statusBar().showMessage("Ready")
+        
         # Connect signals
         self.test_set_manager.test_set_updated.connect(self.evaluation_widget.update_test_set)
         self.prompts_catalog.prompt_selected_for_eval.connect(self.on_prompt_selected_for_eval)
@@ -66,3 +69,7 @@ class MainWindow(QMainWindow):
         if selected_prompt:
             # Update the LLM Playground with the selected prompt
             self.llm_playground.set_prompt(selected_prompt)
+
+    def show_status(self, message, timeout=5000):
+        """Show a message in the status bar with optional timeout in milliseconds."""
+        self.statusBar().showMessage(message, timeout)

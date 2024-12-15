@@ -241,6 +241,11 @@ class EvaluationWidget(QWidget):
             
             model = self.model_combo.currentText()
             
+            # Show status message if we have a parent window
+            main_window = self.window()
+            if main_window is not self and main_window and hasattr(main_window, 'show_status'):
+                main_window.show_status("Evaluation run started...", 5000)
+            
             # Clear previous results
             self.results_table.setRowCount(0)
             self.semantic_analysis.clear()
@@ -290,6 +295,11 @@ class EvaluationWidget(QWidget):
             # Reset UI state
             self.progress_bar.hide()
             self.run_button.setEnabled(True)
+            
+            # Show completion message if we have a parent window
+            main_window = self.window()
+            if main_window is not self and main_window and hasattr(main_window, 'show_status'):
+                main_window.show_status("Evaluation run completed!", 5000)
             
         except LLMError as e:
             self.progress_bar.hide()

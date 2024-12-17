@@ -18,7 +18,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PromptoLab")
-        self.settings = QSettings("Codeium", "PromptoLab")
+        self.settings = QSettings("cjLabs", "PromptoLab")
         self.storage = FileStorage()
         self.setup_ui()
         

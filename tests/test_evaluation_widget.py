@@ -1,5 +1,5 @@
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal, QObject
 from PySide6.QtWidgets import QApplication, QPushButton, QMessageBox, QTableWidgetItem
 from datetime import datetime
 import sys
@@ -76,6 +76,32 @@ def test_load_test_sets(mock_storage, qtbot, evaluation_widget):
     mock_storage_instance.load_test_set.assert_any_call("Test Set 1")
     mock_storage_instance.load_test_set.assert_any_call("Test Set 2")
 
+class MockRunner(QObject):
+    """Mock runner for LLM async operations."""
+    finished = Signal(str)
+    error = Signal(str)
+    
+    def __init__(self):
+        super().__init__()
+        self.process = MagicMock()
+
+class MockAnalyzer(QObject):
+    """Mock analyzer for async analysis operations."""
+    finished = Signal(object)  # Emits AnalysisResult
+    error = Signal(str)
+    
+    def start_analysis(self, **kwargs):
+        """Mock start_analysis method that emits a result."""
+        self.finished.emit(AnalysisResult(
+            input_text=kwargs.get('input_text', ''),
+            baseline_output=kwargs.get('baseline', ''),
+            current_output=kwargs.get('current', ''),
+            similarity_score=1.0,
+            llm_grade="A",
+            llm_feedback="Perfect match",
+            key_changes=["Using overall semantic similarity for comparison"]
+        ))
+
 @patch('subprocess.run')
 @patch('evaluation_widget.OutputAnalyzer')
 def test_run_evaluation(mock_analyzer, mock_subprocess_run, qtbot, evaluation_widget):
@@ -85,7 +111,7 @@ def test_run_evaluation(mock_analyzer, mock_subprocess_run, qtbot, evaluation_wi
         # Create a new mock result for each call
         result = MagicMock()
         result.returncode = 0
-        
+
         # Mock response for embedding
         if "llm" in cmd and "embed" in cmd:
             # Return same embeddings for baseline and current text
@@ -102,20 +128,13 @@ def test_run_evaluation(mock_analyzer, mock_subprocess_run, qtbot, evaluation_wi
             return result
         return result
     mock_subprocess_run.side_effect = mock_subprocess_run_impl
-    
+
     # Create our mock analyzer instance
     mock_analyzer_instance = mock_analyzer.return_value
+    mock_analyzer_instance.finished = Signal(object)
 
     # Mock analyze_test_case to return a consistent result
-    mock_analyzer_instance.analyze_test_case.return_value = AnalysisResult(
-        input_text="Test prompt",
-        baseline_output="Expected output",
-        current_output="Generated output",
-        similarity_score=1.0,
-        llm_grade="A",
-        llm_feedback="Perfect match",
-        key_changes=["Using overall semantic similarity for comparison"]
-    )
+    mock_analyzer_instance.create_async_analyzer.return_value = MockAnalyzer()
 
     # Mock get_analysis_text and get_feedback_text to match the analysis result
     mock_analyzer_instance.get_analysis_text.return_value = "Semantic Similarity Analysis:\n• Overall Similarity Score: 1.0\n\nNote: Using overall semantic similarity for comparison"
@@ -123,7 +142,7 @@ def test_run_evaluation(mock_analyzer, mock_subprocess_run, qtbot, evaluation_wi
 
     # Replace the widget's analyzer with our mock
     evaluation_widget.output_analyzer = mock_analyzer_instance
-    
+
     # Create and load a test set
     test_case = TestCase(
         input_text="Test prompt",
@@ -138,21 +157,28 @@ def test_run_evaluation(mock_analyzer, mock_subprocess_run, qtbot, evaluation_wi
         last_modified=datetime.now()
     )
     evaluation_widget.current_test_set = test_set
-    
+
     # Set new system prompt
     evaluation_widget.system_prompt_input.setPlainText("New system prompt")
-    
-    # Run evaluation
-    evaluation_widget.run_evaluation()
-    qtbot.wait(100)
-    
-    # Verify results
-    assert evaluation_widget.results_table.rowCount() == 1
-    assert evaluation_widget.results_table.item(0, 0).text() == "Test prompt"
-    assert evaluation_widget.results_table.item(0, 1).text() == "Expected output"
-    assert evaluation_widget.results_table.item(0, 2).text() == "Generated output"
-    assert float(evaluation_widget.results_table.item(0, 3).text()) == 1.0
-    assert evaluation_widget.results_table.item(0, 4).text() == "A"
+
+    # Mock LLM process runner
+    mock_llm_runner = MockRunner()
+
+    with patch('evaluation_widget.run_llm_async', return_value=mock_llm_runner):
+        # Run evaluation
+        evaluation_widget.run_evaluation()
+
+        # Emit LLM result
+        mock_llm_runner.finished.emit("Generated output")
+        qtbot.wait(500)
+
+        # Verify results
+        assert evaluation_widget.results_table.rowCount() == 1
+        assert evaluation_widget.results_table.item(0, 0).text() == "Test prompt"
+        assert evaluation_widget.results_table.item(0, 1).text() == "Expected output"
+        assert evaluation_widget.results_table.item(0, 2).text() == "Generated output"
+        assert float(evaluation_widget.results_table.item(0, 3).text()) == 1.0
+        assert evaluation_widget.results_table.item(0, 4).text() == "A"
 
 def test_system_prompt_expansion(qtbot, evaluation_widget):
     """Test the expandable system prompt behavior."""

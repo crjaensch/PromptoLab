@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTableWidget, QTableWidgetItem, QTextEdit, 
                               QComboBox, QLabel, QLineEdit, QHeaderView, QDialog, 
                               QDialogButtonBox, QProgressDialog)
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QObject
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
@@ -15,8 +15,56 @@ if project_root not in sys.path:
 
 from models import TestSet, TestCase
 from test_storage import TestSetStorage
-from llm_utils import run_llm
+from llm_utils import run_llm_async
 from expandable_text import ExpandableTextWidget
+
+class BaselineGeneratorSignals(QObject):
+    """Signals for the baseline generator."""
+    finished = Signal()
+    progress = Signal(int)
+    error = Signal(str)
+    result = Signal(int, str)
+
+class BaselineGeneratorWorker(QObject):
+    """Worker for generating baselines using QProcess."""
+    finished = Signal()
+    progress = Signal(int)
+    error = Signal(str)
+    result = Signal(int, str)
+    
+    def __init__(self, row, user_prompt, system_prompt, model, max_tokens=None, temperature=None, top_p=None):
+        super().__init__()
+        self.row = row
+        self.user_prompt = user_prompt
+        self.system_prompt = system_prompt
+        self.model = model
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.top_p = top_p
+        self._test_runner = None  # For testing only
+        
+    def start(self):
+        """Start the baseline generation process."""
+        # Use test runner if provided (for testing only)
+        if self._test_runner is not None:
+            runner = self._test_runner
+        else:
+            runner = run_llm_async(
+                self.user_prompt,
+                self.system_prompt,
+                self.model,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                top_p=self.top_p
+            )
+        
+        # Connect signals
+        runner.finished.connect(self._handle_result)
+        runner.error.connect(self.error.emit)
+        
+    def _handle_result(self, result):
+        self.result.emit(self.row, result)
+        self.finished.emit()
 
 class TestSetManagerWidget(QWidget):
     test_set_updated = Signal(TestSet)  # Emitted when test set is modified
@@ -94,7 +142,7 @@ class TestSetManagerWidget(QWidget):
             self.cases_table.removeRow(current_row)
             
     def generate_baseline(self):
-        """Generate baseline outputs for all test cases using the LLM."""
+        """Generate baseline outputs for all test cases using the LLM asynchronously."""
         if self.cases_table.rowCount() == 0:
             self.show_status("No test cases to generate baselines for.", 5000)
             return
@@ -117,39 +165,52 @@ class TestSetManagerWidget(QWidget):
         progress = QProgressDialog("Generating baseline outputs...", "Cancel", 0, self.cases_table.rowCount(), self)
         progress.setWindowModality(Qt.WindowModal)
         
+        # Counter for completed tasks
+        self.completed_tasks = 0
+        self.active_workers = []
+        
+        def handle_result(row, baseline):
+            self.cases_table.setItem(row, 1, QTableWidgetItem(baseline))
+            self.completed_tasks += 1
+            progress.setValue(self.completed_tasks)
+            if self.completed_tasks == self.cases_table.rowCount():
+                self.show_status("Baseline generation completed successfully!", 5000)
+                
+        def handle_error(error_msg):
+            self.show_status(error_msg, 7000)
+            
         try:
             for row in range(self.cases_table.rowCount()):
                 if progress.wasCanceled():
                     break
                     
-                # Update progress
-                progress.setValue(row)
-                
                 # Get the user prompt
                 user_prompt = self.cases_table.item(row, 0).text()
                 if not user_prompt.strip():
+                    self.completed_tasks += 1
                     continue
                     
-                try:
-                    # Generate baseline using LLM with optional parameters
-                    baseline = run_llm(
-                        user_prompt,
-                        self.system_prompt.toPlainText(),
-                        model,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        top_p=top_p
-                    )
-                    
-                    # Update the baseline output in the table
-                    self.cases_table.setItem(row, 1, QTableWidgetItem(baseline))
-                    
-                except Exception as e:
-                    self.show_status(f"Failed to generate baseline for row {row + 1}: {str(e)}", 7000)
-                    
-            progress.setValue(self.cases_table.rowCount())
-            self.show_status("Baseline generation completed successfully!", 5000)
-            
+                # Create and configure the worker
+                worker = BaselineGeneratorWorker(
+                    row,
+                    user_prompt,
+                    self.system_prompt.toPlainText(),
+                    model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=top_p
+                )
+                
+                # Connect signals
+                worker.result.connect(handle_result)
+                worker.error.connect(handle_error)
+                
+                # Keep reference to prevent garbage collection
+                self.active_workers.append(worker)
+                
+                # Start the worker
+                worker.start()
+                
         except Exception as e:
             self.show_status(f"Failed to generate baselines: {str(e)}", 7000)
             

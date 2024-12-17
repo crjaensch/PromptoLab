@@ -6,13 +6,14 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import nltk
 import json
+from PySide6.QtCore import QObject, Signal
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from llm_utils import run_llm, run_embedding
+from llm_utils import run_llm, run_llm_async, run_embedding, run_embedding_async
 
 class AnalysisError(Exception):
     """Base class for analysis errors"""
@@ -37,6 +38,141 @@ class AnalysisResult:
     llm_feedback: str
     key_changes: List[str]
 
+class AsyncAnalyzer(QObject):
+    """Async wrapper for OutputAnalyzer operations."""
+    finished = Signal(AnalysisResult)  # Emits the analysis result when done
+    error = Signal(str)  # Emits error message if something goes wrong
+    
+    def __init__(self, output_analyzer):
+        super().__init__()
+        self.output_analyzer = output_analyzer
+        self.current_runner = None
+        self.pending_embeddings = []
+        self.baseline_embedding = None
+        self.current_embedding = None
+        self.grade = None
+        self.feedback = None
+        
+    def start_analysis(self, input_text: str, baseline: str, current: str, model: str = "gpt-4o"):
+        """Start the async analysis process."""
+        self.input_text = input_text
+        self.baseline = baseline
+        self.current = current
+        self.model = model
+        
+        # Start getting embeddings
+        self._get_embeddings_async()
+        
+    def _get_embeddings_async(self):
+        """Get embeddings for both texts asynchronously."""
+        try:
+            # Start baseline embedding
+            baseline_runner = run_embedding_async(self.baseline)
+            baseline_runner.finished.connect(lambda result: self._handle_baseline_embedding(result))
+            baseline_runner.error.connect(self.error.emit)
+            self.pending_embeddings.append(baseline_runner)
+            
+            # Start current embedding
+            current_runner = run_embedding_async(self.current)
+            current_runner.finished.connect(lambda result: self._handle_current_embedding(result))
+            current_runner.error.connect(self.error.emit)
+            self.pending_embeddings.append(current_runner)
+            
+        except Exception as e:
+            self.error.emit(f"Error starting embeddings: {str(e)}")
+            
+    def _handle_baseline_embedding(self, result):
+        """Handle completion of baseline embedding."""
+        try:
+            self.baseline_embedding = np.array([eval(result)])
+            self._check_completion()
+        except Exception as e:
+            self.error.emit(f"Error processing baseline embedding: {str(e)}")
+            
+    def _handle_current_embedding(self, result):
+        """Handle completion of current embedding."""
+        try:
+            self.current_embedding = np.array([eval(result)])
+            self._check_completion()
+        except Exception as e:
+            self.error.emit(f"Error processing current embedding: {str(e)}")
+            
+    def _check_completion(self):
+        """Check if all async operations are complete and emit result."""
+        if self.baseline_embedding is not None and self.current_embedding is not None:
+            # Calculate similarity
+            similarity = cosine_similarity(self.baseline_embedding, self.current_embedding)[0][0]
+            
+            # Start LLM grading
+            self._get_llm_grade(similarity)
+            
+    def _get_llm_grade(self, similarity):
+        """Get LLM grade asynchronously."""
+        system_prompt = """You are an expert evaluator of language model outputs. Your task is to:
+1. Compare the quality and correctness of two outputs (baseline and current) for the same user prompt
+2. Assess how well each output addresses the user's needs
+3. Identify key differences in approach, style, or content
+4. Provide a letter grade (A, B, C, D, F) for the current output relative to the baseline
+5. Give detailed feedback explaining your grade and assessment
+
+Format your response as:
+Grade: [letter grade]
+---
+[detailed feedback]"""
+
+        evaluation_prompt = f"""User Prompt: {self.input_text}
+
+Baseline Output:
+{self.baseline}
+
+Current Output:
+{self.current}
+
+Please evaluate the current output compared to the baseline."""
+
+        try:
+            runner = run_llm_async(
+                user_prompt=evaluation_prompt,
+                system_prompt=system_prompt,
+                model=self.model
+            )
+            runner.finished.connect(lambda result: self._handle_grade_result(result, similarity))
+            runner.error.connect(self.error.emit)
+            self.current_runner = runner
+            
+        except Exception as e:
+            self.error.emit(f"Error getting LLM evaluation: {str(e)}")
+            
+    def _handle_grade_result(self, result, similarity):
+        """Handle completion of LLM grading."""
+        try:
+            grade_line, *feedback_lines = result.split('\n')
+            grade = grade_line.replace('Grade:', '').strip()
+            feedback = '\n'.join(feedback_lines).strip()
+            
+            # Create final result
+            analysis_result = AnalysisResult(
+                input_text=self.input_text,
+                baseline_output=self.baseline,
+                current_output=self.current,
+                similarity_score=similarity,
+                llm_grade=grade,
+                llm_feedback=feedback,
+                key_changes=[
+                    "Using overall semantic similarity for comparison",
+                    "Similarity score represents whole text comparison"
+                ]
+            )
+            
+            # Store result in analyzer
+            self.output_analyzer.analysis_results.append(analysis_result)
+            
+            # Emit result
+            self.finished.emit(analysis_result)
+            
+        except Exception as e:
+            self.error.emit(f"Error processing grade result: {str(e)}")
+
 class OutputAnalyzer:
     def __init__(self):
         # Ensure NLTK resources are available
@@ -47,6 +183,10 @@ class OutputAnalyzer:
             
         # Initialize history
         self.analysis_results: List[AnalysisResult] = []
+
+    def create_async_analyzer(self) -> AsyncAnalyzer:
+        """Create an async analyzer instance."""
+        return AsyncAnalyzer(self)
 
     def _get_text_embedding(self, text: str) -> np.ndarray:
         """Get embedding for the entire text."""

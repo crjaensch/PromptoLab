@@ -1,5 +1,5 @@
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal, QObject
 from PySide6.QtWidgets import QApplication, QPushButton, QMessageBox
 from datetime import datetime
 import sys
@@ -94,79 +94,94 @@ def test_parameter_changes(qtbot, playground_widget):
     playground_widget.top_p_combo.setCurrentText("0.9")
     assert playground_widget.top_p_combo.currentText() == "0.9"
 
-@patch('llm_playground.run_llm')
-def test_run_playground(mock_run_llm, qtbot, playground_widget):
-    """Test running the playground with a prompt."""
-    mock_run_llm.return_value = "Generated response"
+class MockRunner(QObject):
+    """Mock runner for LLM async operations."""
+    finished = Signal(str)
+    error = Signal(str)
     
-    # Set up prompt
-    qtbot.keyClicks(playground_widget.user_prompt, "Test prompt")
+    def __init__(self):
+        super().__init__()
+        self.process = MagicMock()
+
+@patch('llm_playground.run_llm_async')
+def test_run_playground(mock_run_llm, playground_widget, qtbot):
+    """Test running the playground with a basic prompt."""
+    # Set up mock
+    mock_runner = MockRunner()
+    mock_run_llm.return_value = mock_runner
     
-    # Find and click the run button
-    run_buttons = playground_widget.findChildren(QPushButton, "")
-    run_button = next(btn for btn in run_buttons if btn.text() == "Run")
-    qtbot.mouseClick(run_button, Qt.LeftButton)
-    qtbot.wait(100)
+    # Set input text
+    playground_widget.user_prompt.setPlainText("Test prompt")
     
-    # Verify run_llm was called with correct parameters
+    # Run playground
+    playground_widget.run_playground()
+    
+    # Verify LLM was called
     mock_run_llm.assert_called_once()
     args = mock_run_llm.call_args[0]
     assert args[0] == "Test prompt"  # user_prompt
-    assert args[1] is None  # system_prompt (not visible)
-    assert args[2] == "gpt-4o-mini"  # model
+    assert args[1] is None  # system_prompt
     
-    # Verify output
-    assert playground_widget.playground_output.toPlainText() == "Generated response"
+    # Emit result
+    mock_runner.finished.emit("Test response")
+    qtbot.wait(100)
+    
+    # Check output
+    assert playground_widget.playground_output.toPlainText() == "Test response"
 
-@patch('llm_playground.run_llm')
-def test_run_playground_with_system_prompt(mock_run_llm, qtbot, playground_widget):
-    """Test running the playground with both system and user prompts."""
-    mock_run_llm.return_value = "Generated response"
+@patch('llm_playground.run_llm_async')
+def test_run_playground_with_system_prompt(mock_run_llm, playground_widget, qtbot):
+    """Test running the playground with a system prompt."""
+    # Set up mock
+    mock_runner = MockRunner()
+    mock_run_llm.return_value = mock_runner
     
-    # Enable and set system prompt
-    qtbot.mouseClick(playground_widget.system_prompt_checkbox, Qt.LeftButton)
-    qtbot.wait(100)
-    qtbot.keyClicks(playground_widget.system_prompt, "Be helpful")
+    # Set input text and system prompt
+    playground_widget.user_prompt.setPlainText("Test prompt")
+    playground_widget.system_prompt.setPlainText("Test system prompt")
+    playground_widget.system_prompt_checkbox.setChecked(True)  # Enable system prompt
     
-    # Set user prompt
-    qtbot.keyClicks(playground_widget.user_prompt, "Test prompt")
+    # Run playground
+    playground_widget.run_playground()
     
-    # Run the playground
-    run_buttons = playground_widget.findChildren(QPushButton, "")
-    run_button = next(btn for btn in run_buttons if btn.text() == "Run")
-    qtbot.mouseClick(run_button, Qt.LeftButton)
-    qtbot.wait(100)
-    
-    # Verify run_llm was called with correct parameters
+    # Verify LLM was called with system prompt
     mock_run_llm.assert_called_once()
     args = mock_run_llm.call_args[0]
     assert args[0] == "Test prompt"  # user_prompt
-    assert args[1] == "Be helpful"  # system_prompt
-    assert args[2] == "gpt-4o-mini"  # model
+    assert args[1] == "Test system prompt"  # system_prompt
+    
+    # Emit result
+    mock_runner.finished.emit("Test response")
+    qtbot.wait(100)
+    
+    # Check output
+    assert playground_widget.playground_output.toPlainText() == "Test response"
 
-@patch('llm_playground.run_llm')
-def test_improve_prompt(mock_run_llm, qtbot, playground_widget):
+@patch('llm_playground.run_llm_async')
+def test_improve_prompt(mock_run_llm, playground_widget, qtbot):
     """Test the improve prompt functionality."""
-    mock_run_llm.return_value = "Improved prompt suggestion"
+    # Set up mock
+    mock_runner = MockRunner()
+    mock_run_llm.return_value = mock_runner
     
-    # Set up prompt
-    qtbot.keyClicks(playground_widget.user_prompt, "Test prompt")
+    # Set input text
+    playground_widget.user_prompt.setPlainText("Test prompt")
     
-    # Find and click the improve button
-    improve_buttons = playground_widget.findChildren(QPushButton, "")
-    improve_button = next(btn for btn in improve_buttons if btn.text() == "Improve Prompt")
-    qtbot.mouseClick(improve_button, Qt.LeftButton)
-    qtbot.wait(100)
+    # Run improve prompt
+    playground_widget.improve_prompt()
     
-    # Verify run_llm was called with correct parameters
+    # Verify LLM was called with improvement system prompt
     mock_run_llm.assert_called_once()
     args = mock_run_llm.call_args[0]
-    assert "<original_prompt>" in args[0]  # Check if prompt was wrapped
-    assert "Test prompt" in args[0]  # Check if original prompt is included
-    assert playground_widget.improve_prompt_cmd == args[1]  # Check if improvement prompt is used
+    assert '<original_prompt>\n User: Test prompt\n</original_prompt>' == args[0]  # exact format match
+    assert "expert prompt engineering system" in args[1].lower()  # system_prompt should be about prompt engineering
     
-    # Verify output
-    assert playground_widget.playground_output.toPlainText() == "Improved prompt suggestion"
+    # Emit result
+    mock_runner.finished.emit("Improved test prompt")
+    qtbot.wait(100)
+    
+    # Check output is in the playground output
+    assert "Improved test prompt" in playground_widget.playground_output.toPlainText()
 
 def test_error_handling(qtbot, playground_widget):
     """Test error handling for empty prompts."""

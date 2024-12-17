@@ -19,7 +19,7 @@ from models import TestSet
 from test_storage import TestSetStorage
 from output_analyzer import (OutputAnalyzer, AnalysisResult, AnalysisError,
                             LLMError, SimilarityError)
-from llm_utils import run_llm, get_llm_models
+from llm_utils import run_llm_async, get_llm_models
 from expandable_text import ExpandableTextWidget
 
 class EvaluationWidget(QWidget):
@@ -29,6 +29,9 @@ class EvaluationWidget(QWidget):
         self.test_storage = TestSetStorage()
         self.output_analyzer = OutputAnalyzer()
         self.current_test_set = None
+        self.current_llm_runner = None
+        self.current_analyzer = None
+        self.pending_cases = []
         self.setup_ui()
         
     def setup_ui(self):
@@ -241,10 +244,8 @@ class EvaluationWidget(QWidget):
             
             model = self.model_combo.currentText()
             
-            # Show status message if we have a parent window
-            main_window = self.window()
-            if main_window is not self and main_window and hasattr(main_window, 'show_status'):
-                main_window.show_status("Evaluation run started...", 5000)
+            # Show status message
+            self.show_status("Evaluation run started...", 5000)
             
             # Clear previous results
             self.results_table.setRowCount(0)
@@ -260,75 +261,101 @@ class EvaluationWidget(QWidget):
             self.progress_bar.setMaximum(len(self.current_test_set.cases))
             self.run_button.setEnabled(False)
             
-            # Process each test case
-            for i, test_case in enumerate(self.current_test_set.cases):
-                # Generate current output
-                current = run_llm(test_case.input_text, self.system_prompt_input.toPlainText(), model)
-                
-                # Analyze the test case
-                result = self.output_analyzer.analyze_test_case(
-                    input_text=test_case.input_text,
-                    baseline=test_case.baseline_output,
-                    current=current,
-                    model=model
-                )
-                
-                # Add row to results table
-                row = self.results_table.rowCount()
-                self.results_table.insertRow(row)
-                
-                # Add items to the row
-                self.results_table.setItem(row, 0, QTableWidgetItem(result.input_text))
-                self.results_table.setItem(row, 1, QTableWidgetItem(result.baseline_output))
-                self.results_table.setItem(row, 2, QTableWidgetItem(result.current_output))
-                self.results_table.setItem(row, 3, QTableWidgetItem(f"{result.similarity_score:.2f}"))
-                self.results_table.setItem(row, 4, QTableWidgetItem(result.llm_grade))
-                
-                # Update progress
-                self.progress_bar.setValue(i + 1)
-                QApplication.processEvents()  # Allow UI updates
-            
-            # Select the first row to show initial analysis
-            if self.results_table.rowCount() > 0:
-                self.results_table.selectRow(0)
-            
-            # Reset UI state
-            self.progress_bar.hide()
-            self.run_button.setEnabled(True)
-            
-            # Show completion message if we have a parent window
-            main_window = self.window()
-            if main_window is not self and main_window and hasattr(main_window, 'show_status'):
-                main_window.show_status("Evaluation run completed!", 5000)
-            
-        except LLMError as e:
-            self.progress_bar.hide()
-            self.run_button.setEnabled(True)
-            QMessageBox.critical(self, "LLM Error", 
-                               f"Error during LLM processing: {str(e)}\n\n"
-                               "Please check your model settings and try again.")
-            
-        except SimilarityError as e:
-            self.progress_bar.hide()
-            self.run_button.setEnabled(True)
-            QMessageBox.critical(self, "Analysis Error", 
-                               f"Error computing similarity: {str(e)}\n\n"
-                               "Please check your inputs and try again.")
-            
-        except AnalysisError as e:
-            self.progress_bar.hide()
-            self.run_button.setEnabled(True)
-            QMessageBox.critical(self, "Analysis Error", 
-                               f"Error during analysis: {str(e)}\n\n"
-                               "Please check your inputs and try again.")
+            # Start with the first test case
+            self.pending_cases = list(enumerate(self.current_test_set.cases))
+            self._process_next_case(model)
             
         except Exception as e:
-            self.progress_bar.hide()
-            self.run_button.setEnabled(True)
-            QMessageBox.critical(self, "Error", 
-                               f"Unexpected error during evaluation: {str(e)}\n\n"
-                               "Please check the application logs for more details.")
+            self._handle_error("Unexpected error during evaluation", str(e))
             
+    def _process_next_case(self, model):
+        """Process the next test case in the queue."""
+        if not self.pending_cases:
+            self._finish_evaluation()
+            return
+            
+        i, test_case = self.pending_cases.pop(0)
+        
+        # Start LLM generation
+        self.current_llm_runner = run_llm_async(
+            test_case.input_text,
+            self.system_prompt_input.toPlainText(),
+            model
+        )
+        
+        def handle_llm_result(current_output):
+            # Start analysis
+            self.current_analyzer = self.output_analyzer.create_async_analyzer()
+            self.current_analyzer.finished.connect(
+                lambda result: self._handle_analysis_result(i, result)
+            )
+            self.current_analyzer.error.connect(
+                lambda error: self._handle_error("Analysis Error", error)
+            )
+            
+            self.current_analyzer.start_analysis(
+                input_text=test_case.input_text,
+                baseline=test_case.baseline_output,
+                current=current_output,
+                model=model
+            )
+            
+        def handle_llm_error(error):
+            self._handle_error("LLM Error", error)
+            
+        self.current_llm_runner.finished.connect(handle_llm_result)
+        self.current_llm_runner.error.connect(handle_llm_error)
+        
+    def _handle_analysis_result(self, row, result):
+        """Handle completion of analysis for a test case."""
+        try:
+            # Add row to results table
+            self.results_table.insertRow(row)
+            
+            # Add items to the row
+            self.results_table.setItem(row, 0, QTableWidgetItem(result.input_text))
+            self.results_table.setItem(row, 1, QTableWidgetItem(result.baseline_output))
+            self.results_table.setItem(row, 2, QTableWidgetItem(result.current_output))
+            self.results_table.setItem(row, 3, QTableWidgetItem(f"{result.similarity_score:.2f}"))
+            self.results_table.setItem(row, 4, QTableWidgetItem(result.llm_grade))
+            
+            # Update progress
+            self.progress_bar.setValue(row + 1)
+            
+            # Process next case if any
+            model = self.model_combo.currentText()
+            self._process_next_case(model)
+            
+        except Exception as e:
+            self._handle_error("Error handling analysis result", str(e))
+            
+    def _finish_evaluation(self):
+        """Clean up after evaluation is complete."""
+        # Select the first row to show initial analysis
+        if self.results_table.rowCount() > 0:
+            self.results_table.selectRow(0)
+        
+        # Reset UI state
+        self.progress_bar.hide()
+        self.run_button.setEnabled(True)
+        
+        # Show completion message
+        self.show_status("Evaluation run completed!", 5000)
+        
+    def _handle_error(self, title, message):
+        """Handle errors during evaluation."""
+        self.progress_bar.hide()
+        self.run_button.setEnabled(True)
+        QMessageBox.critical(self, title, 
+                           f"{title}: {message}\n\n"
+                           "Please check your inputs and try again.")
+        
+    def show_status(self, message, timeout=5000):
+        """Show a status message in the main window's status bar."""
+        main_window = self.window()
+        if main_window is not self and main_window and hasattr(main_window, 'show_status'):
+            main_window.show_status(message, timeout)
+
     def toggle_analysis(self):
         if self.analysis_tabs.isVisible():
             # Store current sizes before hiding

@@ -2,7 +2,7 @@ from pathlib import Path
 import sys
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTextEdit, QComboBox, QLabel, QSplitter,
-                              QCheckBox)
+                              QCheckBox, QProgressDialog)
 from PySide6.QtCore import Qt, Slot
 
 # Add the project root directory to Python path
@@ -11,7 +11,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from expandable_text import ExpandableTextWidget
-from llm_utils import run_llm, get_llm_models
+from llm_utils import run_llm_async, get_llm_models
 from special_prompts import get_prompt_improvement_prompt
 from collapsible_panel import CollapsiblePanel
 
@@ -22,6 +22,14 @@ class LLMPlaygroundWidget(QWidget):
         self.improve_prompt_cmd = get_prompt_improvement_prompt()
         self.setup_ui()
         self.load_state()
+        self.current_runner = None  # Keep track of current LLM process
+
+    def show_status(self, message, timeout=5000):
+        """Show a status message in the main window's status bar."""
+        # Find the main window instance
+        main_window = self.window()
+        if main_window is not self and main_window and hasattr(main_window, 'show_status'):
+            main_window.show_status(message, timeout)
 
     def setup_ui(self):
         playground_layout = QHBoxLayout(self)
@@ -230,11 +238,47 @@ class LLMPlaygroundWidget(QWidget):
             temperature = float(self.temperature_combo.currentText()) if self.temperature_combo.currentText() else None
             top_p = float(self.top_p_combo.currentText()) if self.top_p_combo.currentText() else None
             
-            result = run_llm(user_prompt_text, system_prompt_text, model,
-                         temperature=temperature, max_tokens=max_tokens, top_p=top_p)
-            self.playground_output.setMarkdown(result)  # render markdown
+            # Show progress dialog and status
+            progress = QProgressDialog("Running LLM...", "Cancel", 0, 0, self)
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setMinimumDuration(400)  # Show after 400ms to avoid flashing for quick responses
+            self.show_status("Running LLM request...", 0)  # Show until completion
+            
+            # Start async LLM process
+            self.current_runner = run_llm_async(
+                user_prompt_text, 
+                system_prompt_text, 
+                model,
+                temperature=temperature, 
+                max_tokens=max_tokens, 
+                top_p=top_p
+            )
+            
+            def handle_result(result):
+                progress.close()
+                self.playground_output.setMarkdown(result)
+                self.show_status("LLM request completed successfully!", 5000)
+                
+            def handle_error(error):
+                progress.close()
+                self.playground_output.setPlainText(f"Error: {error}")
+                self.show_status(f"Error: {error}", 7000)
+                
+            # Connect signals
+            self.current_runner.finished.connect(handle_result)
+            self.current_runner.error.connect(handle_error)
+            
+            # Handle cancellation
+            def handle_cancel():
+                if self.current_runner:
+                    self.current_runner.process.kill()
+                    self.show_status("LLM request cancelled", 5000)
+                    
+            progress.canceled.connect(handle_cancel)
+            
         except Exception as e:
             self.playground_output.setPlainText(f"Error: {str(e)}")
+            self.show_status(f"Error: {str(e)}", 7000)
 
     @Slot()
     def improve_prompt(self):
@@ -243,6 +287,7 @@ class LLMPlaygroundWidget(QWidget):
         user_prompt = self.user_prompt.toPlainText()
         if not user_prompt:
             self.playground_output.setPlainText("Please enter a prompt to improve.")
+            self.show_status("Please enter a prompt to improve.", 5000)
             return
             
         try:
@@ -253,10 +298,40 @@ class LLMPlaygroundWidget(QWidget):
                 if system_prompt.strip():
                     overall_prompt = f"<original_prompt>\nSystem: {system_prompt}\n\nUser: {user_prompt}\n</original_prompt>"
             
-            improved_prompt = run_llm(overall_prompt, self.improve_prompt_cmd, model)
-            self.playground_output.setMarkdown(improved_prompt)
+            # Show progress dialog and status
+            progress = QProgressDialog("Improving prompt...", "Cancel", 0, 0, self)
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setMinimumDuration(400)  # Show after 400ms to avoid flashing for quick responses
+            self.show_status("Working on improving your prompt...", 0)  # Show until completion
+            
+            # Start async LLM process
+            self.current_runner = run_llm_async(overall_prompt, self.improve_prompt_cmd, model)
+            
+            def handle_result(result):
+                progress.close()
+                self.playground_output.setMarkdown(result)
+                self.show_status("Prompt improvement completed!", 5000)
+                
+            def handle_error(error):
+                progress.close()
+                self.playground_output.setPlainText(f"Error improving prompt: {error}")
+                self.show_status(f"Error improving prompt: {error}", 7000)
+                
+            # Connect signals
+            self.current_runner.finished.connect(handle_result)
+            self.current_runner.error.connect(handle_error)
+            
+            # Handle cancellation
+            def handle_cancel():
+                if self.current_runner:
+                    self.current_runner.process.kill()
+                    self.show_status("Prompt improvement cancelled", 5000)
+                    
+            progress.canceled.connect(handle_cancel)
+            
         except Exception as e:
             self.playground_output.setPlainText(f"Error improving prompt: {str(e)}")
+            self.show_status(f"Error improving prompt: {str(e)}", 7000)
 
     @Slot()
     def toggle_system_prompt(self):
@@ -266,6 +341,10 @@ class LLMPlaygroundWidget(QWidget):
     def set_prompt(self, prompt):
         """Set the prompt in the playground from a Prompt object"""
         if prompt:
+            # Clear the output first to avoid confusion with old results
+            self.playground_output.clear()
+            
+            # Set the new prompt
             self.user_prompt.setPlainText(prompt.user_prompt)
             if prompt.system_prompt:
                 self.system_prompt.setPlainText(prompt.system_prompt)

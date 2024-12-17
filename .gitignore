@@ -8,6 +8,7 @@ __pycache__/
 env/
 venv/
 scratch/
+test_sets/
 .pytest_cache
 *.log
 .DS_Store

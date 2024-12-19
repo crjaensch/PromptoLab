@@ -79,18 +79,15 @@ class MockRunner(QObject):
         super().__init__()
         self.process = MagicMock()
 
-# TODO: 2024-12-17 - Temporarily disabled test_generate_baseline
-# This test needs to be revisited to properly handle async operations and mocking.
-# The application functionality works correctly, but the test needs refinement.
-"""
 @patch('test_set_manager.QProgressDialog')
 @patch('test_set_manager.run_llm_async')
-def test_generate_baseline(mock_run_llm, mock_progress_dialog, manager_widget, qtbot):
-    # Set up mock progress dialog
+def test_generate_baseline(mock_run_llm, mock_progress_dialog, qtbot, manager_widget):
+    """Test generating baseline outputs for test cases."""
+    # Setup mock progress dialog
     progress = mock_progress_dialog.return_value
     progress.wasCanceled.return_value = False
 
-    # Set up mock settings
+    # Setup mock settings
     def mock_settings_value(key, default, type):
         settings = {
             "selected_model": "gpt-4o-mini",
@@ -101,13 +98,21 @@ def test_generate_baseline(mock_run_llm, mock_progress_dialog, manager_widget, q
         return settings.get(key, default)
     manager_widget.settings.value = mock_settings_value
 
-    # Create test set with cases
+    # 1. Setup a TestSet with 2 test cases
     test_set = TestSet(
         name="Test Set",
-        system_prompt="Test system prompt",
+        system_prompt="You are a helpful assistant that provides concise answers.",
         cases=[
-            TestCase(input_text="Test input 1", baseline_output="", created_at=datetime.now()),
-            TestCase(input_text="Test input 2", baseline_output="", created_at=datetime.now())
+            TestCase(
+                input_text="What is the capital of France?",
+                baseline_output="",
+                created_at=datetime.now()
+            ),
+            TestCase(
+                input_text="What is the square root of 16?",
+                baseline_output="",
+                created_at=datetime.now()
+            )
         ],
         created_at=datetime.now(),
         last_modified=datetime.now()
@@ -125,37 +130,47 @@ def test_generate_baseline(mock_run_llm, mock_progress_dialog, manager_widget, q
         manager_widget.cases_table.setItem(row, 0, QTableWidgetItem(case.input_text))
         manager_widget.cases_table.setItem(row, 1, QTableWidgetItem(case.baseline_output))
 
-    # Set up mock LLM runner
+    # 2. Setup mock LLM runner that produces baseline outputs
     mock_runner = MagicMock()
     mock_run_llm.return_value = mock_runner
 
     # Generate baseline
     manager_widget.generate_baseline()
 
-    # Verify LLM was called for each case with correct arguments
+    # Verify LLM was called with correct arguments
     assert mock_run_llm.call_count == len(test_set.cases)
     for i, call_args in enumerate(mock_run_llm.call_args_list):
         args = call_args[0]
         assert args[0] == test_set.cases[i].input_text
         assert args[1] == test_set.system_prompt
 
-    # Inject test runner into each worker
-    for worker in manager_widget.active_workers:
-        worker._test_runner = mock_runner
-        worker.start()  # Reconnect signals with test runner
-
-    # Simulate LLM responses and verify table updates
-    for i in range(len(test_set.cases)):
-        # Store the current state
-        current_progress = i + 1
-        # Simulate LLM response
-        mock_runner.finished.emit(f"Generated output for {test_set.cases[i].input_text}")
-        qtbot.wait(100)  # Wait for signal to be processed
-        # Verify table was updated
-        assert manager_widget.cases_table.item(i, 1).text() == f"Generated output for {test_set.cases[i].input_text}"
+    # 3. Simulate LLM responses and verify table updates
+    expected_outputs = [
+        "Paris is the capital of France.",
+        "The square root of 16 is 4."
+    ]
+    
+    # Wait for workers to be created
+    qtbot.wait(100)
+    
+    # Verify workers were created
+    assert len(manager_widget.active_workers) == len(test_set.cases)
+    
+    # Simulate LLM responses for each worker
+    for i, output in enumerate(expected_outputs):
+        # Get the worker for this test case
+        worker = manager_widget.active_workers[i]
+        # Simulate worker result
+        worker.result.emit(i, output)
+        # Wait for signal to be processed
+        qtbot.wait(100)
+        # Verify table was updated with the baseline output
+        assert manager_widget.cases_table.item(i, 1).text() == output
         # Verify progress was updated
-        assert manager_widget.completed_tasks == current_progress
-"""
+        assert manager_widget.completed_tasks == i + 1
+
+    # Verify final status
+    assert manager_widget.completed_tasks == len(test_set.cases)
 
 @patch('test_set_manager.TestSetStorage')
 def test_save_load_test_set(mock_storage, qtbot, manager_widget):

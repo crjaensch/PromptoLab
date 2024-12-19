@@ -13,7 +13,7 @@ project_root = str(Path(__file__).parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from llm_utils import run_llm, run_llm_async, run_embedding, run_embedding_async
+from llm_utils import run_llm_async, run_embedding_async
 
 class AnalysisError(Exception):
     """Base class for analysis errors"""
@@ -40,8 +40,8 @@ class AnalysisResult:
 
 class AsyncAnalyzer(QObject):
     """Async wrapper for OutputAnalyzer operations."""
-    finished = Signal(AnalysisResult)  # Emits the analysis result when done
-    error = Signal(str)  # Emits error message if something goes wrong
+    finished = Signal(AnalysisResult)
+    error = Signal(str)
     
     def __init__(self, output_analyzer):
         super().__init__()
@@ -188,20 +188,21 @@ class OutputAnalyzer:
         """Create an async analyzer instance."""
         return AsyncAnalyzer(self)
 
-    def _get_text_embedding(self, text: str) -> np.ndarray:
+    async def _get_text_embedding(self, text: str) -> np.ndarray:
         """Get embedding for the entire text."""
         try:
-            embedding_str = run_embedding(text, embed_model="3-large")
+            runner = run_embedding_async(text, embed_model="3-large")
+            embedding_str = await runner.wait_for_output()
             embedding = eval(embedding_str)  # Safe here since we know the format is a list of numbers
             return np.array([embedding])  # Return as 2D array for cosine_similarity
         except Exception as e:
             raise SimilarityError(f"Error getting text embedding: {str(e)}")
 
-    def _compute_semantic_similarity(self, baseline: str, current: str) -> float:
+    async def _compute_semantic_similarity(self, baseline: str, current: str) -> float:
         """Compute semantic similarity between baseline and current outputs."""
         try:
-            baseline_embedding = self._get_text_embedding(baseline)
-            current_embedding = self._get_text_embedding(current)
+            baseline_embedding = await self._get_text_embedding(baseline)
+            current_embedding = await self._get_text_embedding(current)
             
             similarity = cosine_similarity(baseline_embedding, current_embedding)[0][0]
             return similarity
@@ -209,7 +210,7 @@ class OutputAnalyzer:
         except Exception as e:
             raise SimilarityError(f"Error computing semantic similarity: {str(e)}")
 
-    def _get_llm_grade(self, user_prompt: str, baseline: str, current: str, model: str = "gpt-4o") -> tuple[str, str]:
+    async def _get_llm_grade(self, user_prompt: str, baseline: str, current: str, model: str = "gpt-4o") -> tuple[str, str]:
         """Get LLM-based grade and feedback comparing baseline and current outputs."""
         system_prompt = """You are an expert evaluator of language model outputs. Your task is to:
 1. Compare the quality and correctness of two outputs (baseline and current) for the same user prompt
@@ -234,11 +235,12 @@ Current Output:
 Please evaluate the current output compared to the baseline."""
 
         try:
-            result = run_llm(
+            runner = run_llm_async(
                 user_prompt=evaluation_prompt,
                 system_prompt=system_prompt,
                 model=model
             )
+            result = await runner.wait_for_output()
             
             grade_line, *feedback_lines = result.split('\n')
             grade = grade_line.replace('Grade:', '').strip()
@@ -247,12 +249,12 @@ Please evaluate the current output compared to the baseline."""
             return grade, feedback
             
         except Exception as e:
-            raise LLMError(f"Error getting LLM evaluation: {str(e)}")
+            raise LLMError(f"Error getting LLM grade: {str(e)}")
 
-    def analyze_differences(self, baseline: str, current: str) -> dict:
+    async def analyze_differences(self, baseline: str, current: str) -> dict:
         """Analyze differences between baseline and current outputs."""
         try:
-            similarity = self._compute_semantic_similarity(baseline, current)
+            similarity = await self._compute_semantic_similarity(baseline, current)
             
             return {
                 'similarity': {'Overall': similarity},
@@ -264,16 +266,16 @@ Please evaluate the current output compared to the baseline."""
         except Exception as e:
             raise AnalysisError(f"Error analyzing differences: {str(e)}")
 
-    def analyze_test_case(self, input_text: str, baseline: str, current: str, model: str = "gpt-4o") -> AnalysisResult:
+    async def analyze_test_case(self, input_text: str, baseline: str, current: str, model: str = "gpt-4o") -> AnalysisResult:
         """Analyze a single test case and store the result."""
         try:
-            # Compute similarity
-            similarity = self._compute_semantic_similarity(baseline, current)
+            # Get semantic similarity
+            similarity = await self._compute_semantic_similarity(baseline, current)
             
             # Get LLM grade and feedback
-            grade, feedback = self._get_llm_grade(input_text, baseline, current, model)
+            grade, feedback = await self._get_llm_grade(input_text, baseline, current, model)
             
-            # Create result
+            # Create result object
             result = AnalysisResult(
                 input_text=input_text,
                 baseline_output=baseline,
@@ -300,21 +302,26 @@ Please evaluate the current output compared to the baseline."""
 
     def get_analysis_text(self, index: int) -> str:
         """Get formatted analysis text for the given result index."""
-        if not (0 <= index < len(self.analysis_results)):
+        if not self.analysis_results or index >= len(self.analysis_results):
             return "No analysis available"
             
         result = self.analysis_results[index]
-        return f"""Semantic Similarity Analysis:
-• Overall Similarity Score: {result.similarity_score:.2f}
+        return f"""Semantic Similarity Analysis
+------------------------
+Overall Similarity Score: {result.similarity_score:.2f}
 
-Note: Using dense vector embeddings to compare entire text outputs."""
+Key Changes:
+{"".join(f"- {change}\n" for change in result.key_changes)}"""
 
     def get_feedback_text(self, index: int) -> str:
         """Get formatted feedback text for the given result index."""
-        if not (0 <= index < len(self.analysis_results)):
+        if not self.analysis_results or index >= len(self.analysis_results):
             return "No feedback available"
             
         result = self.analysis_results[index]
-        return f"""Grade: {result.llm_grade}
----
+        return f"""LLM Evaluation
+-------------
+Grade: {result.llm_grade}
+
+Detailed Feedback:
 {result.llm_feedback}"""

@@ -1,79 +1,101 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 import numpy as np
+from PySide6.QtCore import QObject
+from PySide6.QtWidgets import QApplication
+import sys
+from pathlib import Path
+
+# Add the project root directory to Python path
+project_root = str(Path(__file__).parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from output_analyzer import OutputAnalyzer, AnalysisResult, AnalysisError, LLMError, SimilarityError
 
-class TestOutputAnalyzer(unittest.TestCase):
+class TestOutputAnalyzer(unittest.IsolatedAsyncioTestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Create QApplication instance for the test
+        cls.app = QApplication.instance()
+        if cls.app is None:
+            cls.app = QApplication(sys.argv)
+
     def setUp(self):
         self.analyzer = OutputAnalyzer()
         # Mock embedding result that would normally come from run_embedding
         self.mock_embedding = [0.1, 0.2, 0.3, 0.4]
         
     @patch('output_analyzer.nltk')
-    def test_init(self, mock_nltk):
+    async def test_init(self, mock_nltk):
         # Test that NLTK resources are checked/downloaded during initialization
         analyzer = OutputAnalyzer()
         mock_nltk.data.find.assert_called_once_with('tokenizers/punkt')
         self.assertEqual(analyzer.analysis_results, [])
 
-    @patch('output_analyzer.run_embedding')
-    def test_get_text_embedding(self, mock_run_embedding):
-        # Setup mock
-        mock_run_embedding.return_value = str(self.mock_embedding)
+    @patch('output_analyzer.run_embedding_async')
+    async def test_get_text_embedding(self, mock_run_embedding_async):
+        # Setup mock runner
+        mock_runner = AsyncMock()
+        mock_runner.wait_for_output.return_value = str(self.mock_embedding)
+        mock_run_embedding_async.return_value = mock_runner
         
         # Test successful embedding
-        result = self.analyzer._get_text_embedding("test text")
-        self.assertTrue(isinstance(result, np.ndarray))
-        self.assertEqual(result.shape, (1, 4))  # 1 row, 4 features
+        result = await self.analyzer._get_text_embedding("test text")
+        self.assertTrue(np.array_equal(result, np.array([self.mock_embedding])))
         
         # Test error handling
-        mock_run_embedding.side_effect = Exception("API Error")
+        mock_runner.wait_for_output.side_effect = Exception("API Error")
         with self.assertRaises(SimilarityError):
-            self.analyzer._get_text_embedding("test text")
+            await self.analyzer._get_text_embedding("test text")
 
-    @patch('output_analyzer.run_embedding')
+    @patch('output_analyzer.run_embedding_async')
     @patch('output_analyzer.cosine_similarity')
-    def test_compute_semantic_similarity(self, mock_cosine_similarity, mock_run_embedding):
-        # Setup mocks
-        mock_run_embedding.return_value = str(self.mock_embedding)
+    async def test_compute_semantic_similarity(self, mock_cosine_similarity, mock_run_embedding_async):
+        # Setup mock runner
+        mock_runner = AsyncMock()
+        mock_runner.wait_for_output.return_value = str(self.mock_embedding)
+        mock_run_embedding_async.return_value = mock_runner
         mock_cosine_similarity.return_value = np.array([[0.85]])
         
         # Test successful similarity computation
-        similarity = self.analyzer._compute_semantic_similarity("baseline text", "current text")
+        similarity = await self.analyzer._compute_semantic_similarity("baseline text", "current text")
         self.assertEqual(similarity, 0.85)
         
         # Test error handling
         mock_cosine_similarity.side_effect = Exception("Computation Error")
         with self.assertRaises(SimilarityError):
-            self.analyzer._compute_semantic_similarity("baseline text", "current text")
+            await self.analyzer._compute_semantic_similarity("baseline text", "current text")
 
-    @patch('output_analyzer.run_llm')
-    def test_get_llm_grade(self, mock_run_llm):
-        # Setup mock
+    @patch('output_analyzer.run_llm_async')
+    async def test_get_llm_grade(self, mock_run_llm_async):
+        # Setup mock runner
+        mock_runner = AsyncMock()
         mock_response = "Grade: A\n---\nExcellent output"
-        mock_run_llm.return_value = mock_response
+        mock_runner.wait_for_output.return_value = mock_response
+        mock_run_llm_async.return_value = mock_runner
         
         # Test successful grading
-        grade, feedback = self.analyzer._get_llm_grade(
+        grade, feedback = await self.analyzer._get_llm_grade(
             "user prompt", "baseline text", "current text"
         )
         self.assertEqual(grade, "A")
         self.assertEqual(feedback, "---\nExcellent output")
         
         # Test error handling
-        mock_run_llm.side_effect = Exception("LLM Error")
+        mock_runner.wait_for_output.side_effect = Exception("LLM Error")
         with self.assertRaises(LLMError):
-            self.analyzer._get_llm_grade("user prompt", "baseline text", "current text")
+            await self.analyzer._get_llm_grade("user prompt", "baseline text", "current text")
 
     @patch('output_analyzer.OutputAnalyzer._compute_semantic_similarity')
     @patch('output_analyzer.OutputAnalyzer._get_llm_grade')
-    def test_analyze_test_case(self, mock_get_llm_grade, mock_compute_similarity):
+    async def test_analyze_test_case(self, mock_get_llm_grade, mock_compute_similarity):
         # Setup mocks
         mock_compute_similarity.return_value = 0.85
         mock_get_llm_grade.return_value = ("A", "Excellent output")
         
         # Test successful analysis
-        result = self.analyzer.analyze_test_case(
+        result = await self.analyzer.analyze_test_case(
             "input text", "baseline text", "current text"
         )
         
@@ -86,7 +108,34 @@ class TestOutputAnalyzer(unittest.TestCase):
         # Test error handling
         mock_compute_similarity.side_effect = Exception("Analysis Error")
         with self.assertRaises(AnalysisError):
-            self.analyzer.analyze_test_case("input text", "baseline text", "current text")
+            await self.analyzer.analyze_test_case("input text", "baseline text", "current text")
+
+    def test_get_analysis_text(self):
+        # Test with no results
+        self.assertEqual(self.analyzer.get_analysis_text(0), "No analysis available")
+        
+        # Add a mock result and test
+        result = AnalysisResult(
+            input_text="test",
+            baseline_output="baseline",
+            current_output="current",
+            similarity_score=0.85,
+            llm_grade="A",
+            llm_feedback="Good",
+            key_changes=["Change 1", "Change 2"]
+        )
+        self.analyzer.analysis_results.append(result)
+        
+        expected_text = """Semantic Similarity Analysis
+------------------------
+Overall Similarity Score: 0.85
+
+Key Changes:
+- Change 1
+- Change 2"""
+        
+        actual_text = self.analyzer.get_analysis_text(0)
+        self.assertEqual(actual_text.rstrip(), expected_text.rstrip())
 
     def test_clear_history(self):
         # Add a mock result
@@ -105,26 +154,6 @@ class TestOutputAnalyzer(unittest.TestCase):
         # Test clearing history
         self.analyzer.clear_history()
         self.assertEqual(len(self.analyzer.analysis_results), 0)
-
-    def test_get_analysis_text(self):
-        # Test with no results
-        self.assertEqual(self.analyzer.get_analysis_text(0), "No analysis available")
-        
-        # Add a mock result and test
-        result = AnalysisResult(
-            input_text="test",
-            baseline_output="baseline",
-            current_output="current",
-            similarity_score=0.85,
-            llm_grade="A",
-            llm_feedback="Good",
-            key_changes=[]
-        )
-        self.analyzer.analysis_results.append(result)
-        
-        analysis_text = self.analyzer.get_analysis_text(0)
-        self.assertIn("0.85", analysis_text)
-        self.assertIn("Semantic Similarity Analysis", analysis_text)
 
 if __name__ == '__main__':
     unittest.main()

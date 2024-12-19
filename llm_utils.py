@@ -86,58 +86,11 @@ def run_llm_async(user_prompt: str, system_prompt: Optional[str] = None, model: 
     runner.run_async(cmd, user_prompt)
     return runner
 
-def run_llm(user_prompt: str, system_prompt: Optional[str] = None, model: str = "gpt-4o-mini",
-          temperature: Optional[float] = None, max_tokens: Optional[int] = None,
-          top_p: Optional[float] = None) -> str:
-    """Execute prompt using llm CLI tool synchronously."""
-    try:
-        cmd = _build_llm_command(model, system_prompt, temperature, max_tokens, top_p)
-        
-        # Log the command and input
-        logger.info("Running LLM command: %s", " ".join(cmd))
-        logger.info("User prompt: %s", user_prompt)
-        if system_prompt:
-            logger.info("System prompt: %s", system_prompt)
-            
-        result = subprocess.run(
-            cmd,
-            input=user_prompt,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        error_msg = f"LLM execution failed: {e.stderr}"
-        logger.error(error_msg)
-        raise RuntimeError(error_msg)
-
 def _build_embed_command(text: str, embed_model: str = "3-large") -> list[str]:
     """Build the embedding command with all necessary parameters."""
     # Escape any single quotes in the text and wrap in single quotes for llm CLI
     escaped_text = text.replace("'", "'\"'\"'")
     return ["llm", "embed", "-m", embed_model, "-c", "'" + escaped_text + "'"]
-
-def run_embedding(text: str, embed_model: str = "3-large") -> str:
-    """Execute text using llm CLI tool."""
-    try:
-        cmd = _build_embed_command(text, embed_model)
-        
-        # Log the command and input
-        logger.info("Running LLM command: %s", " ".join(cmd))
-        logger.info("Text: %s", text)
-        
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        error_msg = f"LLM execution failed: {e.stderr}"
-        logger.error(error_msg)
-        raise RuntimeError(error_msg)    
 
 def run_embedding_async(text: str, embed_model: str = "3-large") -> LLMProcessRunner:
     """Execute text embedding using llm CLI tool asynchronously."""

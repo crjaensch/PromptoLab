@@ -285,15 +285,19 @@ class EvaluationWidget(QWidget):
         
         def handle_llm_result(current_output):
             # Start analysis
-            self.current_analyzer = self.output_analyzer.create_async_analyzer()
-            self.current_analyzer.finished.connect(
+            analyzer = self.output_analyzer.create_async_analyzer()
+            analyzer.finished.connect(
                 lambda result: self._handle_analysis_result(i, result)
             )
-            self.current_analyzer.error.connect(
+            analyzer.error.connect(
                 lambda error: self._handle_error("Analysis Error", error)
             )
             
-            self.current_analyzer.start_analysis(
+            # Store reference to prevent garbage collection
+            self.current_analyzer = analyzer
+            
+            # Start the analysis
+            analyzer.start_analysis(
                 input_text=test_case.input_text,
                 baseline=test_case.baseline_output,
                 current=current_output,

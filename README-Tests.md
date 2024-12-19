@@ -15,6 +15,7 @@ The unit tests in the `./tests` subfolder are designed to verify the functionali
 - `tests/test_prompts_catalog.py`: Tests for the `PromptsCatalogWidget` component.
 - `tests/test_storage.py`: Tests for the storage functionality.
 - `tests/test_test_set_manager.py`: Tests for the `TestSetManagerWidget` component.
+- `tests/test_llm_utils.py`: Tests for the `LLM utilities` component.
 
 ## Setting Up the Environment
 

@@ -99,7 +99,12 @@ class TestSetManagerWidget(QWidget):
         self.cases_table = QTableWidget()
         self.cases_table.setColumnCount(2)
         self.cases_table.setHorizontalHeaderLabels(["User Prompt", "Baseline Output"])
-        self.cases_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        # Configure headers to stretch but allow resizing
+        header = self.cases_table.horizontalHeader()
+        header.setStretchLastSection(True)  # Make last section stretch to fill remaining space
+        header.setSectionResizeMode(0, QHeaderView.Interactive)  # Allow first column to be resized
+        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Last column stretches to fill space
+        
         layout.addWidget(self.cases_table)
         
         # Buttons
@@ -123,6 +128,12 @@ class TestSetManagerWidget(QWidget):
         self.generate_baseline_btn.clicked.connect(self.generate_baseline)
         self.save_btn.clicked.connect(self.save_test_set)
         self.load_btn.clicked.connect(self.load_test_set)
+        
+    def showEvent(self, event):
+        """Handle the widget being shown for the first time."""
+        super().showEvent(event)
+        # Set initial column widths to 1/3 and 2/3 ratio
+        self.cases_table.horizontalHeader().resizeSection(0, self.width() // 3)
         
     def show_status(self, message, timeout=5000):
         """Show a message in the status bar."""

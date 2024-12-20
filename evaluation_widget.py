@@ -100,22 +100,31 @@ class EvaluationWidget(QWidget):
         self.results_table.setColumnCount(5)
         self.results_table.setHorizontalHeaderLabels([
             "User Prompt", "Baseline Output", "Current Output",
-            "Semantic Sim.", "LLM Grade"
+            "Similarity", "LLM Grade"
         ])
         
         # Configure table properties
         header = self.results_table.horizontalHeader()
         
-        # Set specific widths for numeric columns
-        self.results_table.setColumnWidth(3, 100)  # Semantic Sim.
-        self.results_table.setColumnWidth(4, 80)   # LLM Grade
+        # Set fixed widths for numeric columns
+        self.results_table.setColumnWidth(3, 75)  # Similarity
+        self.results_table.setColumnWidth(4, 75)  # LLM Grade
         
-        # Make the text columns stretch to fill remaining space
-        header.setSectionResizeMode(0, QHeaderView.Stretch)  # User Prompt
-        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Baseline Output
-        header.setSectionResizeMode(2, QHeaderView.Stretch)  # Current Output
-        header.setSectionResizeMode(3, QHeaderView.Fixed)    # Semantic Sim.
+        # Configure header resize modes
+        header.setStretchLastSection(False)  # Disable automatic stretch of last section
+        
+        # Make first three columns interactive and stretchable
+        header.setSectionResizeMode(0, QHeaderView.Interactive)  # User Prompt
+        header.setSectionResizeMode(1, QHeaderView.Interactive)  # Baseline Output
+        header.setSectionResizeMode(2, QHeaderView.Interactive)  # Current Output
+        header.setSectionResizeMode(3, QHeaderView.Fixed)    # Similarity
         header.setSectionResizeMode(4, QHeaderView.Fixed)    # LLM Grade
+        
+        # Set initial equal widths for the text columns
+        available_width = self.results_table.viewport().width() - 150  # Subtract fixed columns
+        column_width = available_width // 3
+        for i in range(3):
+            self.results_table.setColumnWidth(i, column_width)
         
         # Enable text wrapping and auto-adjust row heights
         self.results_table.setWordWrap(True)
@@ -417,3 +426,34 @@ class EvaluationWidget(QWidget):
         index = self.test_set_combo.findText(test_set.name)
         if index >= 0:
             self.test_set_combo.setCurrentIndex(index)
+
+    def resizeEvent(self, event):
+        """Handle widget resize to maintain column proportions."""
+        super().resizeEvent(event)
+        
+        # Only adjust if table exists and has correct number of columns
+        if hasattr(self, 'results_table') and self.results_table.columnCount() == 5:
+            # Calculate total width of user-adjustable columns
+            adjustable_width = sum(self.results_table.columnWidth(i) for i in range(3))
+            if adjustable_width == 0:  # Avoid division by zero
+                return
+                
+            # Calculate new available width
+            new_available = self.results_table.viewport().width() - 150  # Subtract fixed columns
+            
+            # Adjust each column proportionally
+            for i in range(3):
+                current_width = self.results_table.columnWidth(i)
+                proportion = current_width / adjustable_width
+                new_width = int(new_available * proportion)
+                self.results_table.setColumnWidth(i, new_width)
+                
+    def showEvent(self, event):
+        """Handle the widget being shown for the first time."""
+        super().showEvent(event)
+        # Trigger initial column sizing
+        if hasattr(self, 'results_table') and self.results_table.columnCount() == 5:
+            available_width = self.results_table.viewport().width() - 150  # Subtract fixed columns
+            column_width = available_width // 3
+            for i in range(3):
+                self.results_table.setColumnWidth(i, column_width)

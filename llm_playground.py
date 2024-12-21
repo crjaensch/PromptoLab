@@ -12,14 +12,21 @@ if project_root not in sys.path:
 
 from expandable_text import ExpandableTextWidget
 from llm_utils import run_llm_async, get_llm_models
-from special_prompts import get_prompt_improvement_prompt
+from special_prompts import (get_TAG_pattern_improvement_prompt,
+                             get_PIC_pattern_improvement_prompt,
+                             get_LIFE_pattern_improvement_prompt)
 from collapsible_panel import CollapsiblePanel
 
 class LLMPlaygroundWidget(QWidget):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
         self.settings = settings
-        self.improve_prompt_cmd = get_prompt_improvement_prompt()
+        # Store all prompt patterns
+        self.prompt_patterns = {
+            "TAG": get_TAG_pattern_improvement_prompt(),
+            "PIC": get_PIC_pattern_improvement_prompt(),
+            "LIFE": get_LIFE_pattern_improvement_prompt()
+        }
         self.setup_ui()
         self.load_state()
         self.current_runner = None  # Keep track of current LLM process
@@ -315,6 +322,10 @@ class LLMPlaygroundWidget(QWidget):
             return
             
         try:
+            # Get the selected pattern
+            pattern = self.pattern_combo.currentText()
+            pattern_prompt = self.prompt_patterns["TAG"] if pattern not in self.prompt_patterns else self.prompt_patterns[pattern]
+            
             # Combine system and user prompts if system prompt exists and is visible
             overall_prompt = f"<original_prompt>\n User: {user_prompt}\n</original_prompt>"
             if self.system_prompt_checkbox.isChecked() and self.system_prompt.isVisible():
@@ -326,10 +337,10 @@ class LLMPlaygroundWidget(QWidget):
             progress = QProgressDialog("Improving prompt...", "Cancel", 0, 0, self)
             progress.setWindowModality(Qt.WindowModal)
             progress.setMinimumDuration(400)  # Show after 400ms to avoid flashing for quick responses
-            self.show_status("Working on improving your prompt...", 0)  # Show until completion
+            self.show_status(f"Working on improving your prompt using {pattern} pattern...", 0)  # Show until completion
             
             # Start async LLM process
-            self.current_runner = run_llm_async(overall_prompt, self.improve_prompt_cmd, model)
+            self.current_runner = run_llm_async(overall_prompt, pattern_prompt, model)
             
             def handle_result(result):
                 progress.close()

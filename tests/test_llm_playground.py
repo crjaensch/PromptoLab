@@ -164,23 +164,40 @@ def test_improve_prompt(mock_run_llm, playground_widget, qtbot):
     mock_runner = MockRunner()
     mock_run_llm.return_value = mock_runner
     
-    # Set input text
+    # Set input text and ensure TAG pattern is selected (default)
     playground_widget.user_prompt.setPlainText("Test prompt")
+    playground_widget.pattern_combo.setCurrentText("TAG")
     
     # Run improve prompt
     playground_widget.improve_prompt()
     
-    # Verify LLM was called with improvement system prompt
+    # Verify LLM was called with TAG pattern
     mock_run_llm.assert_called_once()
     args = mock_run_llm.call_args[0]
     assert '<original_prompt>\n User: Test prompt\n</original_prompt>' == args[0]  # exact format match
-    assert "expert prompt engineering system" in args[1].lower()  # system_prompt should be about prompt engineering
+    assert "task-action-guideline" in args[1].lower()  # TAG pattern should be used
     
-    # Emit result
+    # Test switching to PIC pattern
+    mock_run_llm.reset_mock()
+    playground_widget.pattern_combo.setCurrentText("PIC")
+    playground_widget.improve_prompt()
+    
+    # Verify LLM was called with PIC pattern
+    args = mock_run_llm.call_args[0]
+    assert "persona-instruction-context" in args[1].lower()  # PIC pattern should be used
+    
+    # Test switching to LIFE pattern
+    mock_run_llm.reset_mock()
+    playground_widget.pattern_combo.setCurrentText("LIFE")
+    playground_widget.improve_prompt()
+    
+    # Verify LLM was called with LIFE pattern
+    args = mock_run_llm.call_args[0]
+    assert "learn-improvise-feedback-evaluate" in args[1].lower()  # LIFE pattern should be used
+    
+    # Emit result and verify output
     mock_runner.finished.emit("Improved test prompt")
     qtbot.wait(100)
-    
-    # Check output is in the playground output
     assert "Improved test prompt" in playground_widget.playground_output.toPlainText()
 
 def test_error_handling(qtbot, playground_widget):

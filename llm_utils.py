@@ -41,31 +41,65 @@ class LLMProcessRunner(QObject):
         self.process = QProcess()
         self.process.finished.connect(self._handle_finished)
         self.accumulated_output = ""
+        self._process_deleted = False
         
+    def __del__(self):
+        """Cleanup when the runner is destroyed."""
+        try:
+            if hasattr(self, 'process') and not self._process_deleted:
+                # Check if the process object is still valid and accessible
+                try:
+                    state = self.process.state()
+                    if state != QProcess.NotRunning:
+                        self.process.kill()
+                        self.process.waitForFinished(1000)  # Wait up to 1 second
+                except (RuntimeError, AttributeError):
+                    # Process already deleted by Qt, nothing to do
+                    pass
+        except Exception:
+            # Catch any other cleanup errors silently
+            pass
+        finally:
+            self._process_deleted = True
+            
     def _handle_finished(self, exit_code, exit_status):
-        if exit_code == 0:
-            self.finished.emit(self.accumulated_output.strip())
-        else:
-            error = self.process.readAllStandardError().data().decode()
-            self.error.emit(f"LLM execution failed: {error}")
+        try:
+            if exit_code == 0:
+                self.finished.emit(self.accumulated_output.strip())
+            else:
+                try:
+                    error = self.process.readAllStandardError().data().decode()
+                    self.error.emit(f"LLM execution failed: {error}")
+                except (RuntimeError, AttributeError):
+                    # Handle case where process is already deleted
+                    self.error.emit("LLM execution failed: Process terminated")
+        except Exception as e:
+            logger.error(f"Error in _handle_finished: {str(e)}")
+            self.error.emit(f"LLM execution failed: {str(e)}")
+        finally:
+            self._process_deleted = True
             
-    def run_async(self, cmd: list, input_text: Optional[str] = None):
-        """Run the LLM command asynchronously."""
-        self.accumulated_output = ""
-        self.process.start(cmd[0], cmd[1:])
-        
-        if input_text:
-            self.process.write(input_text.encode())
-            self.process.closeWriteChannel()
-            
-        # Connect to the readyReadStandardOutput signal to accumulate output
-        self.process.readyReadStandardOutput.connect(
-            lambda: self._accumulate_output(self.process.readAllStandardOutput().data().decode())
-        )
-        
     def _accumulate_output(self, output):
         self.accumulated_output += output
 
+    def run_async(self, cmd: list, input_text: Optional[str] = None):
+        """Run the LLM command asynchronously."""
+        try:
+            self.accumulated_output = ""
+            self.process.start(cmd[0], cmd[1:])
+            
+            if input_text:
+                self.process.write(input_text.encode())
+                self.process.closeWriteChannel()
+                
+            # Connect to the readyReadStandardOutput signal to accumulate output
+            self.process.readyReadStandardOutput.connect(
+                lambda: self._accumulate_output(self.process.readAllStandardOutput().data().decode())
+            )
+        except Exception as e:
+            logger.error(f"Error in run_async: {str(e)}")
+            self.error.emit(f"Failed to start LLM process: {str(e)}")
+            
 def run_llm_async(user_prompt: str, system_prompt: Optional[str] = None, model: str = "gpt-4o-mini",
                 temperature: Optional[float] = None, max_tokens: Optional[int] = None,
                 top_p: Optional[float] = None) -> LLMProcessRunner:

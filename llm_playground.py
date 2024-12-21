@@ -86,12 +86,32 @@ class LLMPlaygroundWidget(QWidget):
         # Run and Improve Prompt buttons
         button_layout = QHBoxLayout()
         button_layout.addStretch()
-        run_btn = QPushButton("Run")
-        run_btn.clicked.connect(self.run_playground)
+        
+        # Submit Prompt button on the left
+        submit_btn = QPushButton("Submit Prompt")
+        submit_btn.clicked.connect(self.submit_prompt)
+        button_layout.addWidget(submit_btn)
+        
+        # Add significant space between Submit Prompt and Improve Prompt section
+        button_layout.addStretch(3)  # More stretch weight for bigger gap
+        
+        # Group Improve Prompt button with Pattern selector
         improve_btn = QPushButton("Improve Prompt")
         improve_btn.clicked.connect(self.improve_prompt)
-        button_layout.addWidget(run_btn)
+        pattern_label = QLabel("Prompt Pattern:")
+        self.pattern_combo = QComboBox()
+        self.pattern_combo.addItems(["TAG", "PIC", "LIFE"])
+        self.pattern_combo.setCurrentText("TAG")
+        
+        # Add tooltips for each pattern
+        self.pattern_combo.setItemData(0, "Task-Action-Guideline pattern", Qt.ToolTipRole)
+        self.pattern_combo.setItemData(1, "Persona-Instruction-Context pattern", Qt.ToolTipRole)
+        self.pattern_combo.setItemData(2, "Learn-Improvise-Feedback-Evaluate pattern", Qt.ToolTipRole)
+        
         button_layout.addWidget(improve_btn)
+        button_layout.addWidget(pattern_label)
+        button_layout.addWidget(self.pattern_combo)
+        
         button_layout.addStretch()
         input_layout.addLayout(button_layout)
         
@@ -195,6 +215,7 @@ class LLMPlaygroundWidget(QWidget):
         self.settings.setValue("max_tokens", self.max_tokens_combo.currentText())
         self.settings.setValue("temperature", self.temperature_combo.currentText())
         self.settings.setValue("top_p", self.top_p_combo.currentText())
+        self.settings.setValue("prompt_pattern", self.pattern_combo.currentText())
 
     def load_state(self):
         params_expanded = self.settings.value("params_panel_expanded", False, bool)  
@@ -215,9 +236,12 @@ class LLMPlaygroundWidget(QWidget):
         
         top_p = self.settings.value("top_p", "", str)
         self.top_p_combo.setCurrentText(top_p)
+        
+        pattern = self.settings.value("prompt_pattern", "TAG", str)
+        self.pattern_combo.setCurrentText(pattern)
 
     @Slot()
-    def run_playground(self):
+    def submit_prompt(self):
         try:
             model = self.model_combo.currentText()
             user_prompt_text = self.user_prompt.toPlainText()

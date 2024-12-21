@@ -104,7 +104,7 @@ class MockRunner(QObject):
         self.process = MagicMock()
 
 @patch('llm_playground.run_llm_async')
-def test_run_playground(mock_run_llm, playground_widget, qtbot):
+def test_submit_prompt(mock_run_llm, playground_widget, qtbot):
     """Test running the playground with a basic prompt."""
     # Set up mock
     mock_runner = MockRunner()
@@ -114,7 +114,7 @@ def test_run_playground(mock_run_llm, playground_widget, qtbot):
     playground_widget.user_prompt.setPlainText("Test prompt")
     
     # Run playground
-    playground_widget.run_playground()
+    playground_widget.submit_prompt()
     
     # Verify LLM was called
     mock_run_llm.assert_called_once()
@@ -130,7 +130,7 @@ def test_run_playground(mock_run_llm, playground_widget, qtbot):
     assert playground_widget.playground_output.toPlainText() == "Test response"
 
 @patch('llm_playground.run_llm_async')
-def test_run_playground_with_system_prompt(mock_run_llm, playground_widget, qtbot):
+def test_submit_prompt_with_system_prompt(mock_run_llm, playground_widget, qtbot):
     """Test running the playground with a system prompt."""
     # Set up mock
     mock_runner = MockRunner()
@@ -142,7 +142,7 @@ def test_run_playground_with_system_prompt(mock_run_llm, playground_widget, qtbo
     playground_widget.system_prompt_checkbox.setChecked(True)  # Enable system prompt
     
     # Run playground
-    playground_widget.run_playground()
+    playground_widget.submit_prompt()
     
     # Verify LLM was called with system prompt
     mock_run_llm.assert_called_once()
@@ -187,7 +187,7 @@ def test_error_handling(qtbot, playground_widget):
     """Test error handling for empty prompts."""
     # Try to run with empty prompt
     run_buttons = playground_widget.findChildren(QPushButton, "")
-    run_button = next(btn for btn in run_buttons if btn.text() == "Run")
+    run_button = next(btn for btn in run_buttons if btn.text() == "Submit Prompt")
     qtbot.mouseClick(run_button, Qt.LeftButton)
     qtbot.wait(100)
     

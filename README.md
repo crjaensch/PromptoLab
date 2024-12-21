@@ -18,8 +18,11 @@ Here's a quick visual overview of PromptoLab's main features:
 ### Prompts Catalog
 ![Prompts Catalog for managing your prompt library](images/Prompts-Catalog-Screen.png)
 
-### LLM Playground
-![Interactive LLM Playground for prompt development](images/LLM-Playground-Screen.png)
+### LLM Playground - Submit Prompt
+![Interactive LLM Playground for prompt development](images/LLM-Playground-Screen_Submit-Prompt.png)
+
+### LLM Playground - Improve Prompt
+![Interactive LLM Playground for prompt development](images/LLM-Playground-Screen_Improve-Prompt.png)
 
 ### Test Set Manager
 ![Test Set Manager for systematic prompt test set definition](images/TestSet-Manager-Screen.png)

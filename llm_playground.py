@@ -39,7 +39,10 @@ class LLMPlaygroundWidget(QWidget):
             main_window.show_status(message, timeout)
 
     def setup_ui(self):
-        playground_layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
+        
+        # Create horizontal layout for main area and params
+        playground_layout = QHBoxLayout()
         
         # Main playground area
         playground_main = QWidget()
@@ -156,6 +159,15 @@ class LLMPlaygroundWidget(QWidget):
         ))
         
         playground_main_layout.addWidget(playground_splitter)
+        
+        # Save as New Prompt button (right-aligned)
+        save_button_layout = QHBoxLayout()
+        save_button_layout.addStretch()
+        self.save_as_prompt_button = QPushButton("Save as New Prompt")
+        self.save_as_prompt_button.clicked.connect(self.save_as_new_prompt)
+        self.save_as_prompt_button.setEnabled(False)  # Initially disabled
+        save_button_layout.addWidget(self.save_as_prompt_button)
+        playground_main_layout.addLayout(save_button_layout)
 
         playground_layout.addWidget(playground_main)
         
@@ -213,7 +225,9 @@ class LLMPlaygroundWidget(QWidget):
         self.params_panel.content_layout.addLayout(params_content_layout)
         playground_layout.addWidget(self.params_panel)
         playground_layout.setSpacing(16)  # Consistent spacing
-
+        
+        layout.addLayout(playground_layout)
+        
     def save_state(self):
         self.settings.setValue("params_panel_expanded", self.params_panel.expanded)
         self.settings.setValue("playground_system_prompt_visible", self.system_prompt_visible)
@@ -288,11 +302,13 @@ class LLMPlaygroundWidget(QWidget):
             def handle_result(result):
                 progress.close()
                 self.playground_output.setMarkdown(result)
+                self.save_as_prompt_button.setEnabled(False)  # Ensure button is disabled for regular submit
                 self.show_status("LLM request completed successfully!", 5000)
                 
             def handle_error(error):
                 progress.close()
                 self.playground_output.setPlainText(f"Error: {error}")
+                self.save_as_prompt_button.setEnabled(False)  # Disable button on error
                 self.show_status(f"Error: {error}", 7000)
                 
             # Connect signals
@@ -309,6 +325,7 @@ class LLMPlaygroundWidget(QWidget):
             
         except Exception as e:
             self.playground_output.setPlainText(f"Error: {str(e)}")
+            self.save_as_prompt_button.setEnabled(False)  # Disable button on error
             self.show_status(f"Error: {str(e)}", 7000)
 
     @Slot()
@@ -318,6 +335,7 @@ class LLMPlaygroundWidget(QWidget):
         user_prompt = self.user_prompt.toPlainText()
         if not user_prompt:
             self.playground_output.setPlainText("Please enter a prompt to improve.")
+            self.save_as_prompt_button.setEnabled(False)  # Disable button if no prompt
             self.show_status("Please enter a prompt to improve.", 5000)
             return
             
@@ -345,11 +363,13 @@ class LLMPlaygroundWidget(QWidget):
             def handle_result(result):
                 progress.close()
                 self.playground_output.setMarkdown(result)
+                self.save_as_prompt_button.setEnabled(True)  # Only enable button for improve prompt results
                 self.show_status("Prompt improvement completed!", 5000)
                 
             def handle_error(error):
                 progress.close()
                 self.playground_output.setPlainText(f"Error improving prompt: {error}")
+                self.save_as_prompt_button.setEnabled(False)  # Disable button on error
                 self.show_status(f"Error improving prompt: {error}", 7000)
                 
             # Connect signals
@@ -366,6 +386,7 @@ class LLMPlaygroundWidget(QWidget):
             
         except Exception as e:
             self.playground_output.setPlainText(f"Error improving prompt: {str(e)}")
+            self.save_as_prompt_button.setEnabled(False)  # Disable button on error
             self.show_status(f"Error improving prompt: {str(e)}", 7000)
 
     @Slot()
@@ -375,8 +396,8 @@ class LLMPlaygroundWidget(QWidget):
 
     def set_prompt(self, prompt):
         """Set the prompt in the playground from a Prompt object"""
-        if prompt:
-            # Clear the output first to avoid confusion with old results
+        try:
+            # Clear previous output
             self.playground_output.clear()
             
             # Set the new prompt
@@ -389,6 +410,12 @@ class LLMPlaygroundWidget(QWidget):
                 self.system_prompt.clear()
                 self.system_prompt_checkbox.setChecked(False)
                 self.system_prompt.setVisible(False)
+                
+            # Disable the save button since this is a new prompt
+            self.save_as_prompt_button.setEnabled(False)
+            
+        except Exception as e:
+            self.show_status(f"Error setting prompt: {str(e)}", 7000)
 
     def toggle_compact_mode(self, expanded):
         """Toggle between compact and normal mode for input controls"""
@@ -419,3 +446,21 @@ class LLMPlaygroundWidget(QWidget):
             # Restore original placeholders
             self.system_prompt.setPlaceholderText("Enter an optional system prompt...")
             self.user_prompt.setPlaceholderText("Enter your prompt here...")
+
+    @Slot()
+    def save_as_new_prompt(self):
+        """Switch to the prompts catalog and populate the User Prompt field with the improved prompt"""
+        try:
+            improved_text = self.playground_output.toPlainText().strip()
+            
+            # Get the main window and switch to the prompts catalog tab
+            main_window = self.window()  # Get the top-level window
+            main_window.switch_to_prompts_catalog()
+            
+            # Get the prompts catalog widget and set the improved text
+            catalog = main_window.prompts_catalog
+            catalog.create_new_prompt()
+            catalog.user_prompt.setPlainText(improved_text)
+            
+        except Exception as e:
+            self.show_status(f"Error switching to prompts catalog: {str(e)}", 7000)

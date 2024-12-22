@@ -515,9 +515,16 @@ class EvaluationWidget(QWidget):
         if not file_name:
             return
             
+        # Prepare metadata
+        metadata = {
+            'test_set_name': self.current_test_set.name if self.current_test_set else 'N/A',
+            'system_prompt': self.system_prompt_input.toPlainText(),
+            'model_name': self.model_combo.currentText()
+        }
+        
         # Generate HTML report
         report_generator = HtmlEvalReport()
-        html_content = report_generator.generate_report(self.evaluation_results)
+        html_content = report_generator.generate_report(self.evaluation_results, metadata)
         
         # Write HTML content to file
         with open(file_name, "w", encoding='utf-8') as file:

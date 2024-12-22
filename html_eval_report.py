@@ -9,18 +9,23 @@ class HtmlEvalReport:
     def __init__(self):
         self.md = markdown.Markdown(extensions=['tables', 'fenced_code'])
         
-    def generate_report(self, evaluation_results: List[Dict]) -> str:
+    def generate_report(self, evaluation_results: List[Dict], metadata: Dict[str, str]) -> str:
         """Generate an HTML report from evaluation results.
         
         Args:
             evaluation_results: List of dictionaries containing evaluation results
                               Each dict should have: input_text, baseline_output,
                               current_output, similarity_score, and llm_grade
+            metadata: Dictionary containing evaluation metadata:
+                     - test_set_name: Name of the test set used
+                     - system_prompt: System prompt used for evaluation
+                     - model_name: Name of the LLM model used
         
         Returns:
             str: Complete HTML document as a string
         """
         html_content = self._get_html_header()
+        html_content += self._generate_metadata_section(metadata)
         html_content += self._generate_table_content(evaluation_results)
         html_content += self._get_html_footer()
         return html_content
@@ -39,10 +44,51 @@ class HtmlEvalReport:
                 .score { text-align: center; }
                 pre { background-color: #f8f8f8; padding: 10px; border-radius: 4px; }
                 code { background-color: #f0f0f0; padding: 2px 4px; border-radius: 2px; }
+                .metadata { 
+                    background-color: #f5f5f5;
+                    padding: 15px;
+                    border-radius: 4px;
+                    margin: 20px 0;
+                }
+                .metadata h2 {
+                    margin-top: 0;
+                    color: #333;
+                }
+                .metadata dl {
+                    margin: 0;
+                    display: grid;
+                    grid-template-columns: max-content auto;
+                    gap: 10px;
+                }
+                .metadata dt {
+                    font-weight: bold;
+                    color: #666;
+                }
+                .metadata dd {
+                    margin: 0;
+                }
             </style>
         </head>
         <body>
             <h1>Evaluation Results</h1>
+        """
+    
+    def _generate_metadata_section(self, metadata: Dict[str, str]) -> str:
+        """Generate the HTML for the metadata section."""
+        return f"""
+            <div class="metadata">
+                <h2>Evaluation Details</h2>
+                <dl>
+                    <dt>Test Set:</dt>
+                    <dd>{metadata.get('test_set_name', 'N/A')}</dd>
+                    
+                    <dt>Model:</dt>
+                    <dd>{metadata.get('model_name', 'N/A')}</dd>
+                    
+                    <dt>System Prompt:</dt>
+                    <dd>{self.md.convert(metadata.get('system_prompt', 'N/A'))}</dd>
+                </dl>
+            </div>
             <table>
                 <tr>
                     <th>Input Text</th>

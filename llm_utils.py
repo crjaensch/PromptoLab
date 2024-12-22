@@ -47,7 +47,6 @@ class LLMProcessRunner(QObject):
         """Cleanup when the runner is destroyed."""
         try:
             if hasattr(self, 'process') and not self._process_deleted:
-                # Check if the process object is still valid and accessible
                 try:
                     state = self.process.state()
                     if state != QProcess.NotRunning:
@@ -86,20 +85,21 @@ class LLMProcessRunner(QObject):
         """Run the LLM command asynchronously."""
         try:
             self.accumulated_output = ""
+            self._process_deleted = False
             self.process.start(cmd[0], cmd[1:])
             
             if input_text:
                 self.process.write(input_text.encode())
                 self.process.closeWriteChannel()
                 
-            # Connect to the readyReadStandardOutput signal to accumulate output
+            # Connect output handling in run_async to avoid timing issues
             self.process.readyReadStandardOutput.connect(
                 lambda: self._accumulate_output(self.process.readAllStandardOutput().data().decode())
             )
         except Exception as e:
             logger.error(f"Error in run_async: {str(e)}")
             self.error.emit(f"Failed to start LLM process: {str(e)}")
-            
+
 def run_llm_async(user_prompt: str, system_prompt: Optional[str] = None, model: str = "gpt-4o-mini",
                 temperature: Optional[float] = None, max_tokens: Optional[int] = None,
                 top_p: Optional[float] = None) -> LLMProcessRunner:

@@ -72,19 +72,17 @@ Here's a quick visual overview of PromptoLab's main features:
    ```
 
 ## Usage
+### Key Features
 
-1. **LLM Playground**
-   - Enter your prompt in the user prompt field
-   - Optionally set a system prompt
-   - Adjust LLM parameters (temperature, max_tokens, top_p) as needed
-   - Click "Run" to see the LLM response
-   - Click "Improve Prompt" to improve the current prompt using the LLM
+- **Prompts Catalog**: Seamlessly define and organize prompts using three distinct prompt categories. This centralized hub ensures your prompts are always accessible and well-structured for easy reuse.
 
-2. **Test Set Manager**
-   - Create a new test set with a name and system prompt
-   - Add test cases with user prompts
-   - Generate baseline outputs using current LLM settings
-   - Save and load test sets for future reference
+- **LLM Playground**: Dive into experimentation with two dynamic options. Choose to submit a selected prompt from your catalog or request improvements for a given prompt using one of three proven prompt patterns. Customize your experience further by selecting your preferred LLM model and tweaking three critical LLM control parameters.
+
+- **Prompts Test Set Manager**: Simplify testing of complex system prompts in generative AI applications. Define and manage test cases to ensure your system prompt guides LLM responses effectively across various user prompts.
+
+- **Evaluation Playground**: Assess the impact of prompt adjustments with ease. This powerful tool helps you evaluate whether modifications to a system prompt enhance or hinder LLM responses across diverse user scenarios, giving you the confidence to optimize with precision.
+
+With PromptoLab, navigating the complexities of prompt design has never been more intuitive or exciting. Ready to optimize your prompt performance? Dive into PromptoLab today!
 
 ## Development
 

@@ -2,11 +2,12 @@ from datetime import datetime
 from pathlib import Path
 import sys
 from typing import List, Dict, Optional, Tuple
+import markdown
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QComboBox, QPushButton, QTextEdit, QProgressBar,
                                QTableWidget, QTableWidgetItem, QMessageBox,
                                QGroupBox, QFrame, QSplitter, QTabWidget,
-                               QHeaderView, QApplication)
+                               QHeaderView, QApplication, QFileDialog)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
@@ -32,6 +33,7 @@ class EvaluationWidget(QWidget):
         self.current_llm_runner = None
         self.current_analyzer = None
         self.pending_cases = []
+        self.evaluation_results = []  # Store accumulated results
         self.setup_ui()
         
     def setup_ui(self):
@@ -209,6 +211,31 @@ class EvaluationWidget(QWidget):
         """)
         bottom_layout.addWidget(self.run_button)
         
+        # Export Results button
+        self.export_button = QPushButton("Export Results")
+        self.export_button.clicked.connect(self.export_results)
+        self.export_button.setFixedWidth(self.export_button.sizeHint().width() + 20)  # Add 20px padding
+        self.export_button.setEnabled(False)  # Initially disabled
+        self.export_button.setStyleSheet("""
+            QPushButton {
+                padding: 5px 10px;
+                background: white;
+                color: black;
+                border: 1px solid #ccc;
+                border-radius: 2px;
+            }
+            QPushButton:hover {
+                background: #f0f0f0;
+                border-color: #999;
+            }
+            QPushButton:disabled {
+                background: #f5f5f5;
+                color: #999;
+                border-color: #ddd;
+            }
+        """)
+        bottom_layout.addWidget(self.export_button)
+        
         layout.addLayout(bottom_layout)
         
         self.refresh_test_sets()
@@ -260,15 +287,17 @@ class EvaluationWidget(QWidget):
             self.results_table.setRowCount(0)
             self.semantic_analysis.clear()
             self.llm_feedback.clear()
+            self.evaluation_results = []  # Clear accumulated results
             
             # Clear analyzer history
             self.output_analyzer.clear_history()
             
-            # Show progress bar and disable run button
+            # Show progress bar and disable buttons
             self.progress_bar.show()
             self.progress_bar.setValue(0)
             self.progress_bar.setMaximum(len(self.current_test_set.cases))
             self.run_button.setEnabled(False)
+            self.export_button.setEnabled(False)
             
             # Start with the first test case
             self.pending_cases = list(enumerate(self.current_test_set.cases))
@@ -332,6 +361,15 @@ class EvaluationWidget(QWidget):
             self.results_table.setItem(row, 3, QTableWidgetItem(f"{result.similarity_score:.2f}"))
             self.results_table.setItem(row, 4, QTableWidgetItem(result.llm_grade))
             
+            # Store result in accumulator
+            self.evaluation_results.append({
+                "input_text": result.input_text,
+                "baseline_output": result.baseline_output,
+                "current_output": result.current_output,
+                "similarity_score": result.similarity_score,
+                "llm_grade": result.llm_grade
+            })
+            
             # Update progress
             self.progress_bar.setValue(row + 1)
             
@@ -351,6 +389,7 @@ class EvaluationWidget(QWidget):
         # Reset UI state
         self.progress_bar.hide()
         self.run_button.setEnabled(True)
+        self.export_button.setEnabled(True)  # Enable export button after completion
         
         # Show completion message
         self.show_status("Evaluation run completed!", 5000)
@@ -359,6 +398,7 @@ class EvaluationWidget(QWidget):
         """Handle errors during evaluation."""
         self.progress_bar.hide()
         self.run_button.setEnabled(True)
+        self.export_button.setEnabled(len(self.evaluation_results) > 0)  # Only enable if we have results
         QMessageBox.critical(self, title, 
                            f"{title}: {message}\n\n"
                            "Please check your inputs and try again.")
@@ -457,3 +497,70 @@ class EvaluationWidget(QWidget):
             column_width = available_width // 3
             for i in range(3):
                 self.results_table.setColumnWidth(i, column_width)
+                
+    def export_results(self):
+        """Export evaluation results to an HTML file."""
+        if not self.evaluation_results:
+            QMessageBox.information(self, "No Results", "No evaluation results to export.")
+            return
+            
+        # Prompt user for file location
+        file_name, _ = QFileDialog.getSaveFileName(self, "Export Results", "", "HTML Files (*.html)")
+        if not file_name:
+            return
+            
+        # Create markdown converter
+        md = markdown.Markdown(extensions=['tables', 'fenced_code'])
+        
+        # Generate HTML content with CSS for better formatting
+        html_content = """
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+                th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+                th { background-color: #f5f5f5; }
+                tr:nth-child(even) { background-color: #f9f9f9; }
+                .score { text-align: center; }
+                pre { background-color: #f8f8f8; padding: 10px; border-radius: 4px; }
+                code { background-color: #f0f0f0; padding: 2px 4px; border-radius: 2px; }
+            </style>
+        </head>
+        <body>
+            <h1>Evaluation Results</h1>
+            <table>
+                <tr>
+                    <th>Input Text</th>
+                    <th>Baseline Output</th>
+                    <th>Current Output</th>
+                    <th>Similarity Score</th>
+                    <th>LLM Grade</th>
+                </tr>
+        """
+        
+        # Add each result row with markdown conversion
+        for result in self.evaluation_results:
+            html_content += f"""
+                <tr>
+                    <td>{md.convert(result['input_text'])}</td>
+                    <td>{md.convert(result['baseline_output'])}</td>
+                    <td>{md.convert(result['current_output'])}</td>
+                    <td class="score">{result['similarity_score']:.2f}</td>
+                    <td>{result['llm_grade']}</td>
+                </tr>
+            """
+            # Reset the markdown converter for the next iteration to avoid state issues
+            md.reset()
+            
+        html_content += """
+            </table>
+        </body>
+        </html>
+        """
+        
+        # Write HTML content to file
+        with open(file_name, "w", encoding='utf-8') as file:
+            file.write(html_content)
+            
+        QMessageBox.information(self, "Export Complete", "Evaluation results exported successfully.")

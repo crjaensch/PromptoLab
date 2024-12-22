@@ -1,14 +1,14 @@
 from datetime import datetime
 from pathlib import Path
 import sys
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict
+
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                               QComboBox, QPushButton, QTextEdit, QProgressBar,
-                               QTableWidget, QTableWidgetItem, QMessageBox,
-                               QGroupBox, QFrame, QSplitter, QTabWidget,
-                               QHeaderView, QApplication, QFileDialog)
+                              QComboBox, QPushButton, QTextEdit, QProgressBar,
+                              QTableWidget, QTableWidgetItem, QMessageBox,
+                              QGroupBox, QSplitter, QTabWidget,
+                              QHeaderView, QFileDialog)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
@@ -18,7 +18,7 @@ if project_root not in sys.path:
 from models import TestSet
 from test_storage import TestSetStorage
 from output_analyzer import (OutputAnalyzer, AnalysisResult, AnalysisError,
-                            LLMError, SimilarityError)
+                           LLMError, SimilarityError)
 from llm_utils import run_llm_async, get_llm_models
 from expandable_text import ExpandableTextWidget
 from html_eval_report import HtmlEvalReport
@@ -518,7 +518,8 @@ class EvaluationWidget(QWidget):
         # Prepare metadata
         metadata = {
             'test_set_name': self.current_test_set.name if self.current_test_set else 'N/A',
-            'system_prompt': self.system_prompt_input.toPlainText(),
+            'baseline_system_prompt': self.current_test_set.system_prompt if self.current_test_set else 'N/A',
+            'new_system_prompt': self.system_prompt_input.toPlainText(),
             'model_name': self.model_combo.currentText()
         }
         
@@ -530,4 +531,4 @@ class EvaluationWidget(QWidget):
         with open(file_name, "w", encoding='utf-8') as file:
             file.write(html_content)
             
-        QMessageBox.information(self, "Export Complete", "Evaluation results exported successfully.")
+        self.show_status("Evaluation results exported successfully", 5000)

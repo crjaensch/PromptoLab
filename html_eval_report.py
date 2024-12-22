@@ -18,7 +18,8 @@ class HtmlEvalReport:
                               current_output, similarity_score, and llm_grade
             metadata: Dictionary containing evaluation metadata:
                      - test_set_name: Name of the test set used
-                     - system_prompt: System prompt used for evaluation
+                     - baseline_system_prompt: System prompt used for baseline results
+                     - new_system_prompt: System prompt used for comparison evaluation
                      - model_name: Name of the LLM model used
         
         Returns:
@@ -53,18 +54,25 @@ class HtmlEvalReport:
                 .metadata h2 {
                     margin-top: 0;
                     color: #333;
+                    margin-bottom: 15px;
                 }
                 .metadata dl {
                     margin: 0;
                     display: grid;
-                    grid-template-columns: max-content auto;
-                    gap: 10px;
+                    grid-template-columns: 200px 1fr;
+                    gap: 8px 15px;
+                    align-items: start;
                 }
                 .metadata dt {
                     font-weight: bold;
                     color: #666;
+                    padding: 4px 0;
                 }
                 .metadata dd {
+                    margin: 0;
+                    padding: 4px 0;
+                }
+                .metadata dd p {
                     margin: 0;
                 }
             </style>
@@ -85,15 +93,18 @@ class HtmlEvalReport:
                     <dt>Model:</dt>
                     <dd>{metadata.get('model_name', 'N/A')}</dd>
                     
-                    <dt>System Prompt:</dt>
-                    <dd>{self.md.convert(metadata.get('system_prompt', 'N/A'))}</dd>
+                    <dt>Baseline System Prompt:</dt>
+                    <dd>{self.md.convert(metadata.get('baseline_system_prompt', 'N/A'))}</dd>
+
+                    <dt>New System Prompt:</dt>
+                    <dd>{self.md.convert(metadata.get('new_system_prompt', 'N/A'))}</dd>
                 </dl>
             </div>
             <table>
                 <tr>
                     <th>Input Text</th>
                     <th>Baseline Output</th>
-                    <th>Current Output</th>
+                    <th>New Output</th>
                     <th>Similarity Score</th>
                     <th>LLM Grade</th>
                 </tr>

@@ -30,6 +30,9 @@ Here's a quick visual overview of PromptoLab's main features:
 ### Eval Playground
 ![Evaluation Playground for assessing prompt performance](images/Eval-Playground-Screen.png)
 
+### Evaluation Results Report
+![HTML results report for an evaluation run](images/Eval-HTML-Report-Screen.png)
+
 ## Prerequisites
 
 - Python 3.10 or higher

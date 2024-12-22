@@ -2,7 +2,6 @@ from datetime import datetime
 from pathlib import Path
 import sys
 from typing import List, Dict, Optional, Tuple
-import markdown
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QComboBox, QPushButton, QTextEdit, QProgressBar,
                                QTableWidget, QTableWidgetItem, QMessageBox,
@@ -22,6 +21,7 @@ from output_analyzer import (OutputAnalyzer, AnalysisResult, AnalysisError,
                             LLMError, SimilarityError)
 from llm_utils import run_llm_async, get_llm_models
 from expandable_text import ExpandableTextWidget
+from html_eval_report import HtmlEvalReport
 
 class EvaluationWidget(QWidget):
     def __init__(self, settings, parent=None):
@@ -504,60 +504,20 @@ class EvaluationWidget(QWidget):
             QMessageBox.information(self, "No Results", "No evaluation results to export.")
             return
             
-        # Prompt user for file location
-        file_name, _ = QFileDialog.getSaveFileName(self, "Export Results", "", "HTML Files (*.html)")
+        # Prompt user for file location with default name and extension
+        default_name = f"eval_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        file_name, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Results",
+            default_name,
+            "HTML Files (*.html)"
+        )
         if not file_name:
             return
             
-        # Create markdown converter
-        md = markdown.Markdown(extensions=['tables', 'fenced_code'])
-        
-        # Generate HTML content with CSS for better formatting
-        html_content = """
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-                th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-                th { background-color: #f5f5f5; }
-                tr:nth-child(even) { background-color: #f9f9f9; }
-                .score { text-align: center; }
-                pre { background-color: #f8f8f8; padding: 10px; border-radius: 4px; }
-                code { background-color: #f0f0f0; padding: 2px 4px; border-radius: 2px; }
-            </style>
-        </head>
-        <body>
-            <h1>Evaluation Results</h1>
-            <table>
-                <tr>
-                    <th>Input Text</th>
-                    <th>Baseline Output</th>
-                    <th>Current Output</th>
-                    <th>Similarity Score</th>
-                    <th>LLM Grade</th>
-                </tr>
-        """
-        
-        # Add each result row with markdown conversion
-        for result in self.evaluation_results:
-            html_content += f"""
-                <tr>
-                    <td>{md.convert(result['input_text'])}</td>
-                    <td>{md.convert(result['baseline_output'])}</td>
-                    <td>{md.convert(result['current_output'])}</td>
-                    <td class="score">{result['similarity_score']:.2f}</td>
-                    <td>{result['llm_grade']}</td>
-                </tr>
-            """
-            # Reset the markdown converter for the next iteration to avoid state issues
-            md.reset()
-            
-        html_content += """
-            </table>
-        </body>
-        </html>
-        """
+        # Generate HTML report
+        report_generator = HtmlEvalReport()
+        html_content = report_generator.generate_report(self.evaluation_results)
         
         # Write HTML content to file
         with open(file_name, "w", encoding='utf-8') as file:

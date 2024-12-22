@@ -1,0 +1,79 @@
+"""Module for generating HTML evaluation reports with markdown support."""
+
+import markdown
+from typing import List, Dict
+
+class HtmlEvalReport:
+    """Class for generating HTML evaluation reports with markdown support."""
+    
+    def __init__(self):
+        self.md = markdown.Markdown(extensions=['tables', 'fenced_code'])
+        
+    def generate_report(self, evaluation_results: List[Dict]) -> str:
+        """Generate an HTML report from evaluation results.
+        
+        Args:
+            evaluation_results: List of dictionaries containing evaluation results
+                              Each dict should have: input_text, baseline_output,
+                              current_output, similarity_score, and llm_grade
+        
+        Returns:
+            str: Complete HTML document as a string
+        """
+        html_content = self._get_html_header()
+        html_content += self._generate_table_content(evaluation_results)
+        html_content += self._get_html_footer()
+        return html_content
+    
+    def _get_html_header(self) -> str:
+        """Get the HTML header with CSS styling."""
+        return """
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+                th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+                th { background-color: #f5f5f5; }
+                tr:nth-child(even) { background-color: #f9f9f9; }
+                .score { text-align: center; }
+                pre { background-color: #f8f8f8; padding: 10px; border-radius: 4px; }
+                code { background-color: #f0f0f0; padding: 2px 4px; border-radius: 2px; }
+            </style>
+        </head>
+        <body>
+            <h1>Evaluation Results</h1>
+            <table>
+                <tr>
+                    <th>Input Text</th>
+                    <th>Baseline Output</th>
+                    <th>Current Output</th>
+                    <th>Similarity Score</th>
+                    <th>LLM Grade</th>
+                </tr>
+        """
+    
+    def _generate_table_content(self, evaluation_results: List[Dict]) -> str:
+        """Generate the HTML table content from evaluation results."""
+        content = ""
+        for result in evaluation_results:
+            content += f"""
+                <tr>
+                    <td>{self.md.convert(result['input_text'])}</td>
+                    <td>{self.md.convert(result['baseline_output'])}</td>
+                    <td>{self.md.convert(result['current_output'])}</td>
+                    <td class="score">{result['similarity_score']:.2f}</td>
+                    <td>{result['llm_grade']}</td>
+                </tr>
+            """
+            # Reset the markdown converter for the next iteration
+            self.md.reset()
+        return content
+    
+    def _get_html_footer(self) -> str:
+        """Get the HTML footer."""
+        return """
+            </table>
+        </body>
+        </html>
+        """

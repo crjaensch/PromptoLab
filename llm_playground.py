@@ -451,7 +451,8 @@ class LLMPlaygroundWidget(QWidget):
     def save_as_new_prompt(self):
         """Switch to the prompts catalog and populate the User Prompt field with the improved prompt"""
         try:
-            improved_text = self.playground_output.toPlainText().strip()
+            # Get the raw markdown text
+            improved_text = self.playground_output.document().toMarkdown().strip()
             
             # Get the main window and switch to the prompts catalog tab
             main_window = self.window()  # Get the top-level window

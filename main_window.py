@@ -53,6 +53,9 @@ class MainWindow(QMainWindow):
         self.test_set_manager.test_set_updated.connect(self.evaluation_widget.update_test_set)
         self.prompts_catalog.prompt_selected_for_eval.connect(self.on_prompt_selected_for_eval)
         
+        # Load initial data after signals are connected
+        self.prompts_catalog.load_prompts()
+        
     def closeEvent(self, event):
         """Save settings when closing the window."""
         self.settings.sync()

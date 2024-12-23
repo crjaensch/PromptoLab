@@ -27,7 +27,6 @@ class PromptsCatalogWidget(QWidget):
         self.current_prompt = None
         self.system_prompt_visible = self.settings.value("system_prompt_visible", False, bool)
         self.setup_ui()
-        self.load_prompts()
 
     def setup_ui(self):
         catalog_layout = QHBoxLayout(self)
@@ -239,6 +238,9 @@ class PromptsCatalogWidget(QWidget):
         # Select the appropriate prompt
         if self.prompt_list.count() > 0:
             self.prompt_list.setCurrentRow(selected_index)  # This will trigger on_prompt_selected
+            # Emit signal for initial selection to sync with playground
+            current_item = self.prompt_list.item(selected_index)
+            self.prompt_selected_for_eval.emit(current_item, None)
 
     @Slot()
     def on_prompt_selected(self, current, previous):

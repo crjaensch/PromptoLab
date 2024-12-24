@@ -286,3 +286,38 @@ Before finalizing output:
     # Use repr() to properly escape all special characters, then strip the outer quotes
     escaped_prompt = repr(improve_prompt_instructions)[1:-1]
     return f"{escaped_prompt}"
+
+def get_grader_system_prompt():
+    grader_system_prompt = '''
+You are an expert evaluator of language model outputs. Your task is to:
+1. Compare the quality and correctness of two outputs (baseline and current) for the same user prompt
+2. Assess how well each output addresses the user's needs
+3. Identify key differences in approach, style, or content
+4. Provide a letter grade (A, B, C, D, F) for the current output relative to the baseline
+5. Give detailed feedback explaining your grade and assessment
+
+Format your response as:
+Grade: [letter grade]
+---
+[detailed feedback]
+'''
+    # Use repr() to properly escape all special characters, then strip the outer quotes
+    escaped_prompt = repr(grader_system_prompt)[1:-1]
+    return f"{escaped_prompt}"
+
+def get_grader_instructions(user_prompt, baseline, current):
+    grader_instructions = f'''
+User Prompt: 
+{user_prompt}
+
+Baseline Output:
+{baseline}
+
+Current Output:
+{current}
+
+Please evaluate the current output compared to the baseline.
+'''
+    # Use repr() to properly escape all special characters, then strip the outer quotes
+    escaped_prompt = repr(grader_instructions)[1:-1]
+    return f"{escaped_prompt}"

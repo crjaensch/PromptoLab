@@ -14,6 +14,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from llm_utils import run_llm_async, run_embedding_async
+from special_prompts import (get_grader_system_prompt,
+                            get_grader_instructions)
 
 class AnalysisError(Exception):
     """Base class for analysis errors"""
@@ -108,27 +110,12 @@ class AsyncAnalyzer(QObject):
             
     def _get_llm_grade(self, similarity):
         """Get LLM grade asynchronously."""
-        system_prompt = """You are an expert evaluator of language model outputs. Your task is to:
-1. Compare the quality and correctness of two outputs (baseline and current) for the same user prompt
-2. Assess how well each output addresses the user's needs
-3. Identify key differences in approach, style, or content
-4. Provide a letter grade (A, B, C, D, F) for the current output relative to the baseline
-5. Give detailed feedback explaining your grade and assessment
-
-Format your response as:
-Grade: [letter grade]
----
-[detailed feedback]"""
-
-        evaluation_prompt = f"""User Prompt: {self.input_text}
-
-Baseline Output:
-{self.baseline}
-
-Current Output:
-{self.current}
-
-Please evaluate the current output compared to the baseline."""
+        system_prompt = get_grader_system_prompt()
+        evaluation_prompt = get_grader_instructions(
+            self.input_text, 
+            self.baseline, 
+            self.current
+        )
 
         try:
             runner = run_llm_async(
@@ -212,27 +199,8 @@ class OutputAnalyzer:
 
     async def _get_llm_grade(self, user_prompt: str, baseline: str, current: str, model: str = "gpt-4o") -> tuple[str, str]:
         """Get LLM-based grade and feedback comparing baseline and current outputs."""
-        system_prompt = """You are an expert evaluator of language model outputs. Your task is to:
-1. Compare the quality and correctness of two outputs (baseline and current) for the same user prompt
-2. Assess how well each output addresses the user's needs
-3. Identify key differences in approach, style, or content
-4. Provide a letter grade (A, B, C, D, F) for the current output relative to the baseline
-5. Give detailed feedback explaining your grade and assessment
-
-Format your response as:
-Grade: [letter grade]
----
-[detailed feedback]"""
-
-        evaluation_prompt = f"""User Prompt: {user_prompt}
-
-Baseline Output:
-{baseline}
-
-Current Output:
-{current}
-
-Please evaluate the current output compared to the baseline."""
+        system_prompt = get_grader_system_prompt()
+        evaluation_prompt = get_grader_instructions(user_prompt, baseline, current)
 
         try:
             runner = run_llm_async(

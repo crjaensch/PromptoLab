@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import sys
+import os
 from typing import Optional, Dict, List, Tuple, NamedTuple
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -274,12 +275,15 @@ class OutputAnalyzer:
             return "No analysis available"
             
         result = self.analysis_results[index]
-        return f"""Semantic Similarity Analysis
+        return """Semantic Similarity Analysis
 ------------------------
-Overall Similarity Score: {result.similarity_score:.2f}
+Overall Similarity Score: {:.2f}
 
 Key Changes:
-{"".join(f"- {change}\n" for change in result.key_changes)}"""
+{}""".format(
+            result.similarity_score,
+            "".join("- {}{}".format(change, os.linesep) for change in result.key_changes)
+        )
 
     def get_feedback_text(self, index: int) -> str:
         """Get formatted feedback text for the given result index."""
@@ -287,9 +291,9 @@ Key Changes:
             return "No feedback available"
             
         result = self.analysis_results[index]
-        return f"""LLM Evaluation
+        return """LLM Evaluation
 -------------
-Grade: {result.llm_grade}
+Grade: {}
 
 Detailed Feedback:
-{result.llm_feedback}"""
+{}""".format(result.llm_grade, result.llm_feedback)

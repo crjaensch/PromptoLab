@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QTextEdit, QPushButton, QSizePolicy
 from PySide6.QtCore import Qt, Signal, QRect
+from PySide6.QtGui import QKeySequence, QGuiApplication
 
 class ExpandableTextWidget(QTextEdit):
     """
@@ -85,3 +86,17 @@ class ExpandableTextWidget(QTextEdit):
         # Force the splitter to update
         if self.parent():
             self.parent().updateGeometry()
+
+    def keyPressEvent(self, event):
+        """Handle key press events for custom copy behavior"""
+        if event.matches(QKeySequence.Copy):
+            self.copy_as_markdown()
+        else:
+            super().keyPressEvent(event)
+
+    def copy_as_markdown(self):
+        """Copy the content as markdown to the clipboard"""
+        markdown_text = self.document().toMarkdown().strip()
+        if markdown_text:
+            clipboard = QGuiApplication.clipboard()
+            clipboard.setText(markdown_text)

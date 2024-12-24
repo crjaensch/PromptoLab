@@ -39,10 +39,10 @@ class MainWindow(QMainWindow):
         self.test_set_manager = TestSetManagerWidget(self.settings)
         self.evaluation_widget = EvaluationWidget(self.settings)
         
-        self.tabs.addTab(self.prompts_catalog, "Prompts Catalog")
-        self.tabs.addTab(self.llm_playground, "LLM Playground")
-        self.tabs.addTab(self.test_set_manager, "TestSet Manager")
-        self.tabs.addTab(self.evaluation_widget, "Eval Playground")
+        self.tabs.addTab(self.prompts_catalog, "📚 Prompt Catalog")
+        self.tabs.addTab(self.llm_playground, "🧪 LLM Playground")
+        self.tabs.addTab(self.test_set_manager, "📋 Test Sets")
+        self.tabs.addTab(self.evaluation_widget, "📊 Test Evaluation")
         
         layout.addWidget(self.tabs)
         

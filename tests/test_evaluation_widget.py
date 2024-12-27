@@ -191,3 +191,85 @@ def test_system_prompt_expansion(qtbot, evaluation_widget):
     # Get expanded height
     expanded_height = evaluation_widget.system_prompt_input.sizeHint().height()
     assert expanded_height > initial_height
+
+def test_export_results(qtbot, evaluation_widget, tmp_path):
+    """Test exporting evaluation results to HTML."""
+    # Setup test data
+    evaluation_widget.evaluation_results = [{
+        'input_text': 'test input',
+        'baseline_output': 'expected output',
+        'current_output': 'actual output',
+        'similarity_score': 0.95,
+        'llm_grade': 'A'
+    }]
+    
+    # Mock file dialog to return a specific path
+    test_file = tmp_path / "test_export.html"
+    with patch('PySide6.QtWidgets.QFileDialog.getSaveFileName', return_value=(str(test_file), 'HTML Files (*.html)')):
+        # Export results
+        evaluation_widget.export_results()
+        
+        # Verify file was created and contains expected content
+        assert test_file.exists()
+        content = test_file.read_text()
+        assert 'test input' in content
+        assert 'expected output' in content
+        assert 'actual output' in content
+
+def test_show_status(qtbot, evaluation_widget):
+    """Test showing status messages."""
+    # Create mock main window
+    class MockMainWindow:
+        def __init__(self):
+            self.last_message = None
+            self.last_timeout = None
+            
+        def show_status(self, message, timeout):
+            self.last_message = message
+            self.last_timeout = timeout
+    
+    mock_window = MockMainWindow()
+    evaluation_widget.window = lambda: mock_window
+    
+    # Show status message
+    test_message = "Test status"
+    evaluation_widget.show_status(test_message)
+    
+    # Verify message was passed to main window
+    assert mock_window.last_message == test_message
+    assert mock_window.last_timeout == 5000  # default timeout
+
+def test_update_test_set(qtbot, evaluation_widget):
+    """Test updating a test set from external changes."""
+    # Create test sets
+    test_set1 = TestSet(
+        name="Test Set 1",
+        system_prompt="Original prompt",
+        cases=[],
+        created_at=datetime.now(),
+        last_modified=datetime.now()
+    )
+    test_set2 = TestSet(
+        name="Test Set 2",
+        system_prompt="Another prompt",
+        cases=[],
+        created_at=datetime.now(),
+        last_modified=datetime.now()
+    )
+    
+    # Mock storage to return our test sets
+    with patch('evaluation_widget.TestSetStorage') as mock_storage:
+        mock_storage_instance = mock_storage.return_value
+        mock_storage_instance.get_all_test_sets.return_value = ["Test Set 1", "Test Set 2"]
+        mock_storage_instance.load_test_set.side_effect = lambda name: test_set1 if name == "Test Set 1" else test_set2
+        
+        evaluation_widget.test_storage = mock_storage_instance
+        evaluation_widget.refresh_test_sets()
+        
+        # Update test_set1
+        test_set1.system_prompt = "Updated prompt"
+        evaluation_widget.update_test_set(test_set1)
+        
+        # Verify combo box was updated and correct item selected
+        assert evaluation_widget.test_set_combo.findText("Test Set 1") == 0
+        assert evaluation_widget.test_set_combo.currentText() == "Test Set 1"

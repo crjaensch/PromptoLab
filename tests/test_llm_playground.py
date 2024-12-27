@@ -1,6 +1,6 @@
 import pytest
 from PySide6.QtCore import Qt, Signal, QObject
-from PySide6.QtWidgets import QApplication, QPushButton, QMessageBox
+from PySide6.QtWidgets import QApplication, QPushButton, QMessageBox, QProgressDialog
 from datetime import datetime
 import sys
 from pathlib import Path
@@ -243,3 +243,113 @@ def test_save_load_state(qtbot, playground_widget, settings):
     assert new_widget.temperature_combo.currentText() == "0.7"
     assert new_widget.top_p_combo.currentText() == "0.9"
     assert new_widget.system_prompt.toPlainText() == "Test system prompt"
+
+@patch('llm_playground.run_llm_async')
+def test_llm_error_handling(mock_run_llm, playground_widget, qtbot):
+    """Test error handling during LLM processing."""
+    # Set up mock
+    mock_runner = MockRunner()
+    mock_run_llm.return_value = mock_runner
+    
+    # Set input text
+    playground_widget.user_prompt.setPlainText("Test prompt")
+    
+    # Run playground
+    playground_widget.submit_prompt()
+    
+    # Emit error
+    mock_runner.error.emit("Test error message")
+    qtbot.wait(100)
+    
+    # Check error is displayed in output
+    assert "Error: Test error message" in playground_widget.playground_output.toPlainText()
+
+def test_save_as_new_prompt(playground_widget, qtbot):
+    """Test the save as new prompt functionality."""
+    # Set prompts
+    playground_widget.user_prompt.setPlainText("Test user prompt")
+    playground_widget.system_prompt.setPlainText("Test system prompt")
+    playground_widget.system_prompt_checkbox.setChecked(True)
+    
+    # Simulate successful LLM response for improve prompt
+    mock_runner = MockRunner()
+    with patch('llm_playground.run_llm_async', return_value=mock_runner):
+        playground_widget.improve_prompt()
+        mock_runner.finished.emit("Improved test response")
+        qtbot.wait(100)
+        
+        # Verify save button is enabled
+        assert playground_widget.save_as_prompt_button.isEnabled()
+
+def test_compact_mode_toggle(playground_widget, qtbot):
+    """Test toggling compact mode."""
+    # Expand output by clicking the toggle button
+    qtbot.mouseClick(playground_widget.playground_output.toggle_button, Qt.LeftButton)
+    qtbot.wait(100)
+    
+    # Verify expanded state
+    assert playground_widget.playground_output.is_expanded
+    
+    # Contract output
+    qtbot.mouseClick(playground_widget.playground_output.toggle_button, Qt.LeftButton)
+    qtbot.wait(100)
+    
+    # Verify contracted state
+    assert not playground_widget.playground_output.is_expanded
+
+@patch('llm_playground.QProgressDialog', autospec=True)
+def test_progress_dialog(mock_progress_dialog, playground_widget, qtbot):
+    """Test progress dialog functionality."""
+    # Set up mock dialog
+    mock_dialog = MagicMock()
+    mock_progress_dialog.return_value = mock_dialog
+    
+    # Set up mock runner
+    mock_runner = MockRunner()
+    with patch('llm_playground.run_llm_async', return_value=mock_runner):
+        # Submit prompt to trigger progress dialog
+        playground_widget.user_prompt.setPlainText("Test prompt")
+        playground_widget.submit_prompt()
+        
+        # Verify progress dialog was created with correct parameters
+        mock_progress_dialog.assert_called_once_with(
+            "Running LLM...", "Cancel", 0, 0, playground_widget
+        )
+        
+        # Verify dialog was configured correctly
+        mock_dialog.setWindowModality.assert_called_once_with(Qt.WindowModal)
+        mock_dialog.setMinimumDuration.assert_called_once_with(400)
+        
+        # Emit finished signal
+        mock_runner.finished.emit("Test response")
+        qtbot.wait(100)
+
+def test_show_status(playground_widget, qtbot):
+    """Test status message display."""
+    test_message = "Test status message"
+    playground_widget.show_status(test_message)
+    
+    # Get main window
+    main_window = playground_widget.window()
+    if main_window is not playground_widget:
+        # Verify status message was passed to main window
+        assert hasattr(main_window, 'show_status')
+        # Note: Further verification would depend on main window implementation
+
+def test_parameter_validation(playground_widget, qtbot):
+    """Test parameter validation and constraints."""
+    # Test max tokens
+    playground_widget.max_tokens_combo.setCurrentText("1024")
+    assert playground_widget.max_tokens_combo.currentText() == "1024"
+    
+    # Test invalid max tokens (should keep previous valid value)
+    playground_widget.max_tokens_combo.setCurrentText("invalid")
+    assert playground_widget.max_tokens_combo.currentText() == "1024"
+    
+    # Test temperature
+    playground_widget.temperature_combo.setCurrentText("0.7")
+    assert playground_widget.temperature_combo.currentText() == "0.7"
+    
+    # Test top p
+    playground_widget.top_p_combo.setCurrentText("0.9")
+    assert playground_widget.top_p_combo.currentText() == "0.9"

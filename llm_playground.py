@@ -232,14 +232,14 @@ class LLMPlaygroundWidget(QWidget):
         params_content_layout.addLayout(top_p_layout)
         
         # Separator
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFrameShadow(QFrame.Sunken)
-        params_content_layout.addWidget(separator)
+        self.variables_separator = QFrame()
+        self.variables_separator.setFrameShape(QFrame.HLine)
+        self.variables_separator.setFrameShadow(QFrame.Sunken)
+        params_content_layout.addWidget(self.variables_separator)
         
         # Variables section
-        variables_label = QLabel("Prompt Variables:")
-        params_content_layout.addWidget(variables_label)
+        self.variables_label = QLabel("Prompt Variables:")
+        params_content_layout.addWidget(self.variables_label)
         params_content_layout.addSpacing(5)  # Add 5px spacing
         
         # Configure variables table
@@ -550,6 +550,16 @@ class LLMPlaygroundWidget(QWidget):
         # Merge variables, preserving existing values
         all_vars = {**system_vars, **user_vars}
         
+        # Show/hide variables section based on whether there are variables
+        has_variables = len(all_vars) > 0
+        self.variables_separator.setVisible(has_variables)
+        self.variables_label.setVisible(has_variables)
+        self.variables_table.setVisible(has_variables)
+        
+        if not has_variables:
+            self.variables_table.setRowCount(0)
+            return
+            
         # Update table with variables plus one empty row
         row_count = len(all_vars) + 1
         self.variables_table.setRowCount(row_count)

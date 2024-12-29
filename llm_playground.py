@@ -453,8 +453,9 @@ class LLMPlaygroundWidget(QWidget):
     def set_prompt(self, prompt):
         """Set the prompt in the playground from a Prompt object"""
         try:
-            # Clear previous output
+            # Clear previous output and variables
             self.playground_output.clear()
+            self.current_variables.clear()  # Clear existing variables
             
             # Set the new prompt
             self.user_prompt.setPlainText(prompt.user_prompt)
@@ -466,6 +467,9 @@ class LLMPlaygroundWidget(QWidget):
                 self.system_prompt.clear()
                 self.system_prompt_checkbox.setChecked(False)
                 self.system_prompt.setVisible(False)
+                
+            # Force update of variables table
+            self.update_variables_table()
                 
             # Disable the save button since this is a new prompt
             self.save_as_prompt_button.setEnabled(False)
@@ -561,11 +565,20 @@ class LLMPlaygroundWidget(QWidget):
             # Variable name (read-only)
             name_item = QTableWidgetItem(var_name)
             name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            name_item.setToolTip(var_name)  # Show full variable name on hover
             self.variables_table.setItem(i, 0, name_item)
             
             # Variable value (editable)
             value_item = QTableWidgetItem(value)
+            value_item.setToolTip(value)  # Show full value on hover
             self.variables_table.setItem(i, 1, value_item)
+            
+        # Clear the last empty row
+        last_row = len(all_vars)
+        empty_item1 = QTableWidgetItem("")
+        empty_item2 = QTableWidgetItem("")
+        self.variables_table.setItem(last_row, 0, empty_item1)
+        self.variables_table.setItem(last_row, 1, empty_item2)
             
         self.current_variables = all_vars
         

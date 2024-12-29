@@ -1,8 +1,10 @@
 from pathlib import Path
 import sys
+import json
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTextEdit, QComboBox, QLabel, QSplitter,
-                              QCheckBox, QProgressDialog)
+                              QCheckBox, QProgressDialog, QTableWidget,
+                              QTableWidgetItem, QHeaderView, QFrame, QSizePolicy)
 from PySide6.QtCore import Qt, Slot
 
 # Add the project root directory to Python path
@@ -27,6 +29,9 @@ class LLMPlaygroundWidget(QWidget):
             "PIC": get_PIC_pattern_improvement_prompt(),
             "LIFE": get_LIFE_pattern_improvement_prompt()
         }
+        # Initialize variables table first
+        self.variables_table = QTableWidget()
+        self.current_variables = {}  # Store current prompt variables
         self.setup_ui()
         self.load_state()
         self.current_runner = None  # Keep track of current LLM process
@@ -73,6 +78,7 @@ class LLMPlaygroundWidget(QWidget):
             }
         """)
         self.system_prompt.setPlaceholderText("Enter an optional system prompt...")
+        self.system_prompt.textChanged.connect(self.update_variables_table)
         playground_main_layout.addWidget(self.system_prompt)
 
         # Create the user prompt
@@ -86,6 +92,7 @@ class LLMPlaygroundWidget(QWidget):
             }
         """)
         self.user_prompt.setPlaceholderText("Enter your prompt here...")
+        self.user_prompt.textChanged.connect(self.update_variables_table)
 
         # Create a container for user prompt and run button
         input_container = QWidget()
@@ -174,10 +181,12 @@ class LLMPlaygroundWidget(QWidget):
         # Parameters panel as collapsible (now on the right)
         self.params_panel = CollapsiblePanel("Parameters")
         self.params_panel.expanded = False  # Closed by default
-        params_content_layout = QVBoxLayout()
-        params_content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
-        # Model selection
+        # Parameters section
+        params_content_layout = QVBoxLayout()
+        params_content_layout.setAlignment(Qt.AlignTop)  # Align everything to top
+        
+        # Model parameters section
         model_layout = QHBoxLayout()
         model_label = QLabel("Model:")
         self.model_combo = QComboBox()
@@ -222,6 +231,39 @@ class LLMPlaygroundWidget(QWidget):
         top_p_layout.addWidget(self.top_p_combo)
         params_content_layout.addLayout(top_p_layout)
         
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        params_content_layout.addWidget(separator)
+        
+        # Variables section
+        variables_label = QLabel("Prompt Variables:")
+        params_content_layout.addWidget(variables_label)
+        params_content_layout.addSpacing(5)  # Add 5px spacing
+        
+        # Configure variables table
+        self.variables_table.setColumnCount(2)
+        self.variables_table.setHorizontalHeaderLabels(["Variable", "Value"])
+        self.variables_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        self.variables_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.variables_table.setColumnWidth(0, 100)
+        self.variables_table.verticalHeader().setVisible(False)
+        self.variables_table.setAlternatingRowColors(True)
+        self.variables_table.itemChanged.connect(self.on_variable_value_changed)
+        
+        # Enable text wrapping and auto-adjust row heights
+        self.variables_table.setWordWrap(True)
+        self.variables_table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.variables_table.verticalHeader().setMinimumSectionSize(30)  # Set minimum row height
+        
+        # Connect item change to resize rows
+        self.variables_table.itemChanged.connect(self.adjust_row_heights)
+
+        # Set size policy to make height fit content
+        self.variables_table.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        params_content_layout.addWidget(self.variables_table)
+        
         self.params_panel.content_layout.addLayout(params_content_layout)
         playground_layout.addWidget(self.params_panel)
         playground_layout.setSpacing(16)  # Consistent spacing
@@ -237,6 +279,8 @@ class LLMPlaygroundWidget(QWidget):
         self.settings.setValue("temperature", self.temperature_combo.currentText())
         self.settings.setValue("top_p", self.top_p_combo.currentText())
         self.settings.setValue("prompt_pattern", self.pattern_combo.currentText())
+        # Save variables as JSON string
+        self.settings.setValue("variables", json.dumps(self.current_variables))
 
     def load_state(self):
         params_expanded = self.settings.value("params_panel_expanded", False, bool)  
@@ -260,6 +304,14 @@ class LLMPlaygroundWidget(QWidget):
         
         pattern = self.settings.value("prompt_pattern", "TAG", str)
         self.pattern_combo.setCurrentText(pattern)
+        
+        # Restore variables from JSON string
+        variables_json = self.settings.value("variables", "{}", str)
+        try:
+            self.current_variables = json.loads(variables_json)
+        except json.JSONDecodeError:
+            self.current_variables = {}
+        self.update_variables_table()  # Update table with restored variables
 
     @Slot()
     def submit_prompt(self):
@@ -278,6 +330,10 @@ class LLMPlaygroundWidget(QWidget):
                 self.playground_output.setPlainText("Error: User prompt cannot be empty")
                 return
                 
+            # Process prompts to replace variables with their values
+            processed_user_prompt = self.get_processed_prompt(user_prompt_text)
+            processed_system_prompt = self.get_processed_prompt(system_prompt_text) if system_prompt_text else None
+                
             # Convert parameters to the correct type only if they're provided
             max_tokens = int(self.max_tokens_combo.currentText()) if self.max_tokens_combo.currentText() else None
             temperature = float(self.temperature_combo.currentText()) if self.temperature_combo.currentText() else None
@@ -291,8 +347,8 @@ class LLMPlaygroundWidget(QWidget):
             
             # Start async LLM process
             self.current_runner = run_llm_async(
-                user_prompt_text, 
-                system_prompt_text, 
+                processed_user_prompt, 
+                processed_system_prompt, 
                 model,
                 temperature=temperature, 
                 max_tokens=max_tokens, 
@@ -465,3 +521,69 @@ class LLMPlaygroundWidget(QWidget):
             
         except Exception as e:
             self.show_status(f"Error switching to prompts catalog: {str(e)}", 7000)
+
+    def extract_template_variables(self, text):
+        """Extract variables from text using {{variable}} pattern."""
+        import re
+        pattern = r'\{\{(\w+)\}\}'
+        matches = re.finditer(pattern, text)
+        variables = {}
+        for match in matches:
+            var_name = match.group(1)
+            variables[var_name] = self.current_variables.get(var_name, "")
+        return variables
+        
+    def update_variables_table(self):
+        """Update the variables table with current template variables."""
+        # Get text from both system and user prompts
+        system_text = self.system_prompt.toPlainText() if self.system_prompt_visible else ""
+        user_text = self.user_prompt.toPlainText()
+        
+        # Extract variables from both prompts
+        system_vars = self.extract_template_variables(system_text)
+        user_vars = self.extract_template_variables(user_text)
+        
+        # Merge variables, preserving existing values
+        all_vars = {**system_vars, **user_vars}
+        
+        # Update table with variables plus one empty row
+        row_count = len(all_vars) + 1
+        self.variables_table.setRowCount(row_count)
+        
+        # Calculate and set the table height based on content
+        header_height = self.variables_table.horizontalHeader().height()
+        row_height = self.variables_table.rowHeight(0)
+        total_height = header_height + (row_height * row_count) + 2  # +2 for borders
+        self.variables_table.setFixedHeight(total_height)
+        
+        # Populate the table
+        for i, (var_name, value) in enumerate(all_vars.items()):
+            # Variable name (read-only)
+            name_item = QTableWidgetItem(var_name)
+            name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.variables_table.setItem(i, 0, name_item)
+            
+            # Variable value (editable)
+            value_item = QTableWidgetItem(value)
+            self.variables_table.setItem(i, 1, value_item)
+            
+        self.current_variables = all_vars
+        
+    def on_variable_value_changed(self, item):
+        """Handle when a variable value is changed in the table."""
+        if item.column() != 1:  # Only handle value column changes
+            return
+            
+        var_name = self.variables_table.item(item.row(), 0).text()
+        self.current_variables[var_name] = item.text()
+        
+    def get_processed_prompt(self, text):
+        """Replace template variables in text with their values."""
+        processed = text
+        for var_name, value in self.current_variables.items():
+            processed = processed.replace(f"{{{{{var_name}}}}}", value)
+        return processed
+
+    def adjust_row_heights(self, item):
+        """Adjust row heights based on content."""
+        self.variables_table.resizeRowToContents(item.row())

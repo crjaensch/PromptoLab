@@ -6,7 +6,7 @@ PromptoLab is a cross-platform desktop application for cataloging, evaluating, t
 
 - **Prompts Catalog**: Seamlessly define and organize prompts using three distinct prompt categories. This centralized hub ensures your prompts are always accessible and well-structured for easy reuse.
 
-- **LLM Playground**: Dive into experimentation with two dynamic options. Choose to submit a selected prompt from your catalog or request improvements for a given prompt using one of three proven prompt patterns. Customize your experience further by selecting your preferred LLM model and tweaking three critical LLM control parameters.
+- **LLM Playground**: Dive into experimentation with two dynamic options. Choose to submit a selected prompt from your catalog or request improvements for a given prompt using one of three proven prompt patterns. Customize your experience further by selecting your preferred LLM model and tweaking three critical LLM control parameters. Support for {{variable}} syntax in prompts enables quick testing of prompt variations through an interactive variables table.
 
 - **Prompts Test Set Manager**: Simplify testing of complex system prompts in generative AI applications. Define and manage test cases to ensure your system prompt guides LLM responses effectively across various user prompts.
 
@@ -64,6 +64,9 @@ Here's a quick visual overview of PromptoLab's main features:
 
 ### LLM Playground - Submit Prompt
 ![Interactive LLM Playground for prompt development](images/LLM-Playground-Screen_Submit-Prompt.png)
+
+### LLM Playground - Submit Prompt with Variables
+![Interactive LLM Playground for prompt development](images/LLM-Playground-Screen_Submit-Prompt-Variables.png)
 
 ### LLM Playground - Improve Prompt
 ![Interactive LLM Playground for prompt development](images/LLM-Playground-Screen_Improve-Prompt.png)

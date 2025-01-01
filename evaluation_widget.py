@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                               QTableWidget, QTableWidgetItem, QMessageBox,
                               QGroupBox, QSplitter, QTabWidget,
                               QHeaderView, QFileDialog)
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSettings
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
@@ -24,10 +24,10 @@ from expandable_text import ExpandableTextWidget
 from html_eval_report import HtmlEvalReport
 
 class EvaluationWidget(QWidget):
-    def __init__(self, settings, parent=None):
+    def __init__(self, test_set_storage: TestSetStorage, settings: QSettings, parent=None):
         super().__init__(parent)
         self.settings = settings
-        self.test_storage = TestSetStorage()
+        self.test_set_storage = test_set_storage
         self.output_analyzer = OutputAnalyzer()
         self.current_test_set = None
         self.current_llm_runner = None
@@ -243,9 +243,9 @@ class EvaluationWidget(QWidget):
     def refresh_test_sets(self):
         """Update the test set combo box with available test sets."""
         self.test_set_combo.clear()
-        test_set_names = self.test_storage.get_all_test_sets()
+        test_set_names = self.test_set_storage.get_all_test_sets()
         for name in test_set_names:
-            test_set = self.test_storage.load_test_set(name)
+            test_set = self.test_set_storage.load_test_set(name)
             if test_set:
                 self.test_set_combo.addItem(test_set.name, userData=test_set)
             

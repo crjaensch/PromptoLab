@@ -1,10 +1,10 @@
 import pytest
-from PySide6.QtCore import Qt, Signal, QObject
-from PySide6.QtWidgets import QApplication, QPushButton, QMessageBox, QTableWidgetItem
-from datetime import datetime
-import sys
-from pathlib import Path
 from unittest.mock import patch, MagicMock
+from pathlib import Path
+import sys
+from datetime import datetime
+from PySide6.QtWidgets import QApplication, QTableWidgetItem, QMessageBox, QPushButton
+from PySide6.QtCore import Qt, QSettings, Signal, QObject
 import numpy as np
 
 # Add the project root directory to Python path
@@ -17,8 +17,10 @@ from models import TestSet, TestCase
 from output_analyzer import AnalysisResult, OutputAnalyzer
 
 @pytest.fixture
-def evaluation_widget(qtbot, qapp, settings):
-    widget = EvaluationWidget(settings)
+def evaluation_widget(qtbot, qapp):
+    """Create an EvaluationWidget instance for testing."""
+    mock_storage = MagicMock()
+    widget = EvaluationWidget(mock_storage, QSettings())
     widget.show()
     qtbot.addWidget(widget)
     return widget
@@ -61,7 +63,7 @@ def test_load_test_sets(mock_storage, qtbot, evaluation_widget):
     mock_storage_instance.load_test_set.side_effect = lambda name: next((ts for ts in test_sets if ts.name == name), None)
     
     # Set the mock instance
-    evaluation_widget.test_storage = mock_storage_instance
+    evaluation_widget.test_set_storage = mock_storage_instance
     
     # Trigger test set loading
     evaluation_widget.refresh_test_sets()
@@ -263,7 +265,7 @@ def test_update_test_set(qtbot, evaluation_widget):
         mock_storage_instance.get_all_test_sets.return_value = ["Test Set 1", "Test Set 2"]
         mock_storage_instance.load_test_set.side_effect = lambda name: test_set1 if name == "Test Set 1" else test_set2
         
-        evaluation_widget.test_storage = mock_storage_instance
+        evaluation_widget.test_set_storage = mock_storage_instance
         evaluation_widget.refresh_test_sets()
         
         # Update test_set1

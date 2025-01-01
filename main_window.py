@@ -13,13 +13,15 @@ from llm_playground import LLMPlaygroundWidget
 from test_set_manager import TestSetManagerWidget
 from evaluation_widget import EvaluationWidget
 from storage import FileStorage
+from test_storage import TestSetStorage
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, prompt_storage: FileStorage, test_set_storage: TestSetStorage):
         super().__init__()
         self.setWindowTitle("PromptoLab")
         self.settings = QSettings("cjLabs", "PromptoLab")
-        self.storage = FileStorage()
+        self.prompt_storage = prompt_storage
+        self.test_set_storage = test_set_storage
         self.setup_ui()
         
     def setup_ui(self):
@@ -34,10 +36,10 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()  # Make tabs accessible as instance variable
         
         # Create and add widgets to tabs
-        self.prompts_catalog = PromptsCatalogWidget(self.storage, self.settings)
+        self.prompts_catalog = PromptsCatalogWidget(self.prompt_storage, self.settings)
         self.llm_playground = LLMPlaygroundWidget(self.settings)
-        self.test_set_manager = TestSetManagerWidget(self.settings)
-        self.evaluation_widget = EvaluationWidget(self.settings)
+        self.test_set_manager = TestSetManagerWidget(self.test_set_storage, self.settings)
+        self.evaluation_widget = EvaluationWidget(self.test_set_storage, self.settings)
         
         self.tabs.addTab(self.prompts_catalog, "📚 Prompt Catalog")
         self.tabs.addTab(self.llm_playground, "🧪 LLM Playground")

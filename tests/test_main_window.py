@@ -1,10 +1,10 @@
 import pytest
-from PySide6.QtWidgets import QApplication, QTreeWidgetItem
-from PySide6.QtCore import QSettings
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 import sys
 from datetime import datetime
+from PySide6.QtWidgets import QApplication, QTreeWidgetItem
+from PySide6.QtCore import Qt, QSettings
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent.parent)
@@ -17,11 +17,12 @@ from models import Prompt, PromptType
 @pytest.fixture
 def main_window(qtbot, qapp):
     """Create a MainWindow instance for testing."""
-    with patch('PySide6.QtCore.QSettings'):
-        window = MainWindow()
-        window.show()
-        qtbot.addWidget(window)
-        return window
+    mock_prompt_storage = MagicMock()
+    mock_test_set_storage = MagicMock()
+    window = MainWindow(mock_prompt_storage, mock_test_set_storage)
+    window.show()
+    qtbot.addWidget(window)
+    return window
 
 def test_initial_state(main_window):
     """Test the initial state of the MainWindow."""

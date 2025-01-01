@@ -1,10 +1,10 @@
 import pytest
-from PySide6.QtCore import Qt, Signal, QObject
-from PySide6.QtWidgets import QApplication, QPushButton, QMessageBox, QTableWidgetItem
-from datetime import datetime
-import sys
-from pathlib import Path
 from unittest.mock import patch, MagicMock
+from pathlib import Path
+import sys
+from datetime import datetime
+from PySide6.QtCore import Qt, Signal, QObject, QSettings
+from PySide6.QtWidgets import QApplication, QPushButton, QMessageBox, QTableWidgetItem
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent.parent)
@@ -15,8 +15,10 @@ from test_set_manager import TestSetManagerWidget, BaselineGeneratorWorker
 from models import TestSet, TestCase
 
 @pytest.fixture
-def manager_widget(qtbot, qapp, settings):
-    widget = TestSetManagerWidget(settings)
+def manager_widget(qtbot, qapp):
+    """Create a TestSetManagerWidget instance for testing."""
+    mock_storage = MagicMock()
+    widget = TestSetManagerWidget(mock_storage, QSettings())
     widget.show()
     qtbot.addWidget(widget)
     return widget
@@ -185,7 +187,7 @@ def test_save_load_test_set(mock_storage, qtbot, manager_widget):
     # Mock storage methods
     mock_storage_instance = mock_storage.return_value
     mock_storage_instance.save_test_set.return_value = True
-    manager_widget.test_storage = mock_storage_instance  # Set the mock instance
+    manager_widget.test_set_storage = mock_storage_instance  # Set the mock instance
     
     # Save test set
     qtbot.mouseClick(manager_widget.save_btn, Qt.LeftButton)

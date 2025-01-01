@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTableWidget, QTableWidgetItem, QTextEdit, 
                               QComboBox, QLabel, QLineEdit, QHeaderView, QDialog, 
                               QDialogButtonBox, QProgressDialog)
-from PySide6.QtCore import Qt, Signal, QObject
+from PySide6.QtCore import Qt, Signal, QObject, QSettings
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
@@ -69,10 +69,10 @@ class BaselineGeneratorWorker(QObject):
 class TestSetManagerWidget(QWidget):
     test_set_updated = Signal(TestSet)  # Emitted when test set is modified
     
-    def __init__(self, settings, parent=None):
-        super().__init__(parent)
+    def __init__(self, test_set_storage: TestSetStorage, settings: QSettings):
+        super().__init__()
         self.settings = settings
-        self.test_storage = TestSetStorage()
+        self.test_set_storage = test_set_storage
         self.current_test_set = None
         self.setup_ui()
         
@@ -251,7 +251,7 @@ class TestSetManagerWidget(QWidget):
         )
         
         try:
-            self.test_storage.save_test_set(test_set)
+            self.test_set_storage.save_test_set(test_set)
             self.current_test_set = test_set
             self.test_set_updated.emit(test_set)
             self.show_status("Test set saved successfully!", 5000)
@@ -261,7 +261,7 @@ class TestSetManagerWidget(QWidget):
     def load_test_set(self):
         """Load a test set from storage."""
         # Get list of available test sets
-        test_sets = self.test_storage.get_all_test_sets()
+        test_sets = self.test_set_storage.get_all_test_sets()
         if not test_sets:
             self.show_status("No test sets available to load.", 5000)
             return
@@ -284,7 +284,7 @@ class TestSetManagerWidget(QWidget):
         
         if dialog.exec() == QDialog.Accepted:
             selected_name = combo.currentText()
-            test_set = self.test_storage.load_test_set(selected_name)
+            test_set = self.test_set_storage.load_test_set(selected_name)
             if test_set:
                 # Update UI with loaded test set
                 self.clear()  # Clear current data

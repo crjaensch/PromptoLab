@@ -60,13 +60,33 @@ except Exception as e:
     # Fallback to basic console logging if file logging setup fails
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        format='%(asctime)s - %(levelname)s - %(message)s',
         force=True  # Force reconfiguration of the root logger
     )
     logger = logging.getLogger(__name__)
     logger.error("Failed to initialize file logging: %s", str(e))
     logger.info("Falling back to console logging only")
     file_handler = None
+
+# Custom PATH configuration because of macOS .app bundle limitations
+def configure_path():
+    # Get the directory of the current executable
+    if getattr(sys, 'frozen', False):  # Check if app is running in a PyInstaller bundle
+        app_dir = os.path.dirname(sys.executable)
+        logger.info("Application directory (pyinstaller bundle): %s", app_dir)
+    else:
+        app_dir = os.getcwd()
+        logger.info("Application directory (Python script): %s", app_dir)
+
+    # Add the MacOS directory to PATH
+    macos_path = os.path.join(app_dir)
+    current_path = os.environ.get('PATH', '')
+    updated_path = f"{macos_path}:{current_path}"
+    logger.info("Updated PATH: %s", updated_path)
+    os.environ['PATH'] = updated_path
+
+# Call this function early in your app
+configure_path()
 
 def log_environment():
     """Log environment information for debugging purposes."""

@@ -81,7 +81,6 @@ class EvaluationWidget(QWidget):
 
         # System Prompt Input
         system_prompt_label = QLabel("New System Prompt")
-        system_prompt_label.setStyleSheet("QLabel { color: #666; margin-bottom: 2px; }")
         upper_layout.addWidget(system_prompt_label)
         
         self.system_prompt_input = ExpandableTextWidget()

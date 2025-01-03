@@ -87,12 +87,20 @@ class TestSetManagerWidget(QWidget):
         layout.addLayout(info_layout)
         
         # System Prompt
-        layout.addWidget(QLabel("System Prompt:"))
+        system_prompt_label = QLabel("System Prompt:")
+        layout.addWidget(system_prompt_label)
+        
         self.system_prompt = ExpandableTextWidget()
-        # Set height for approximately 2 lines of text (using font metrics)
-        self.system_prompt.setMinimumHeight(35)  # Smaller initial height for 2 lines
-        self.system_prompt.setMaximumHeight(35)  # Force initial height to be small
+        self.system_prompt.setFixedHeight(35)  # Initial collapsed height
         self.system_prompt.setPlaceholderText("Enter system prompt here...")
+        self.system_prompt.expandedChanged.connect(self.on_system_prompt_expanded)
+        self.system_prompt.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #ccc;
+                border-radius: 2px;
+                padding: 2px;
+            }
+        """)
         layout.addWidget(self.system_prompt)
         
         # Test Cases Table
@@ -310,3 +318,10 @@ class TestSetManagerWidget(QWidget):
         self.system_prompt.clear()
         self.cases_table.setRowCount(0)
         self.current_test_set = None
+        
+    def on_system_prompt_expanded(self, expanded: bool):
+        """Handle system prompt expansion/collapse."""
+        if expanded:
+            self.system_prompt.setFixedHeight(400)  # Expanded height
+        else:
+            self.system_prompt.setFixedHeight(35)   # Collapsed height

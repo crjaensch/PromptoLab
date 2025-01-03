@@ -91,10 +91,33 @@ The prompt editing area must implement the following behaviors:
   - Attempting to switch prompts with unsaved changes must trigger a confirmation dialog
   - The Save button must only be enabled when changes are detected
 - The Cancel button must revert all fields to their last saved state
-- For prompt templates, the text area must:
-  - Highlight placeholder variables (text within double curly braces) in a distinct color
-  - Provide autocompletion suggestions for common placeholder variables
-  - Support multi-line editing with proper indentation handling
+
+### 3.3 Prompt Templates
+The application must support parameterized prompts through a template system:
+- Template Variables:
+  - Variables are defined using double curly braces: {{variable-name}}
+  - Variables must be visually distinct within the prompt text
+  - The system should detect and parse variables automatically
+- Variables Table:
+  - Display a table of all detected variables when a template is active
+  - Each variable should have:
+    - Name (derived from the template)
+    - Value field for user input
+    - Clear indication if the value is required
+  - The table should update dynamically as variables are added or removed
+  - Support for multiple occurrences of the same variable
+- Variable Persistence:
+  - Clear values when switching to a different prompt
+  - Provide a way to reset all values to empty state
+
+### 3.4 Template Interaction
+The template system must provide:
+- Intuitive variable creation through typing {{a-variable-name}}
+- Clear visual feedback when variables are recognized
+- Easy navigation between variable input fields
+- Validation of required variables before execution
+- Error handling for:
+  - Missing required values
 
 ## 4. LLM Playground Implementation
 
@@ -136,12 +159,18 @@ The collapsible Parameters panel must:
 - Share settings with Eval Playground
 
 #### System Prompt Section
-- A checkbox controls complete visibility of the System Prompt text area
-- The text area must animate smoothly when shown/hidden
-- When hidden, the space must collapse to prevent empty gaps in the layout
-- The system prompt must use the ExpandableTextWidget component for dynamic resizing
-- Default minimum height should be 120px
-- Must include placeholder text: "Enter an optional system prompt..."
+The system prompt functionality must:
+- Be consistently implemented across all interfaces
+- Support both collapsed and expanded states
+  - Collapsed state should be compact to save screen space
+  - Expanded state should provide comfortable editing space
+- Maintain visual consistency with other text input areas
+- Provide clear visual feedback for state changes
+- Include appropriate placeholder text based on context:
+  - Test Sets: Guide users on system prompt purpose
+  - Evaluation: Indicate the evaluation context
+  - Playground: Clarify the optional nature
+- Preserve user's preferred state between sessions
 
 #### User Prompt Section
 - Must reflect the Current Prompt from the Prompts Catalog when specified
@@ -208,107 +237,74 @@ The application must support efficient keyboard navigation:
 
 ## 7. Eval Playground Implementation
 
-### 7.1 Test Set Management
-The Test Set Manager must:
-- Provide a dedicated interface for creating and managing test sets
-- Include fields for:
-  - Test Set Name (required)
-  - System Prompt (optional, using ExpandableTextWidget)
-  - Test Cases table with columns:
-    - User Prompt
-    - Baseline Output
-- Support adding, editing, and removing test cases
-- Validate inputs before saving
-- Maintain persistence of test sets between sessions
+### 7.1 Core Functionality
+The evaluation interface must provide:
+- Test set selection and management
+- Model selection with dynamic model list
+- System prompt modification capability
+- Comparative evaluation of test cases
+- Detailed analysis of results
 
-### 7.2 Control Panel
-Must include:
-- Test Set selection dropdown
-- Model selection dropdown (dynamically populated)
-- System prompt input area
-- Run evaluation button
+### 7.2 Main Interface Elements
+The interface must include:
+- Selection controls for test set and model
+- System prompt input that can be expanded when needed
+- Results display showing:
+  - Original test cases
+  - Generated responses
+  - Quality metrics
+- Analysis area for detailed feedback
 
-#### Test Set Selection Area
-- Dropdown for selecting test sets
-- Model selection dropdown with support for all models supported by "llm models"
-- System Prompt input using ExpandableTextWidget
-  - Default collapsed height: 35px
-  - Expanded height: 200px
-  - Placeholder text: "Enter the new system prompt to evaluate..."
+### 7.3 Results Presentation
+The results must show:
+- User prompts from test cases
+- Original baseline outputs
+- New generated outputs
+- Quality metrics:
+  - Semantic similarity scores
+  - LLM evaluation grades
+- Clear visual distinction between different result types
 
-#### Results Table
-- Columns:
-  - User Prompt
-  - Baseline Output
-  - Current Output
-  - Semantic Similarity (numeric, 2 decimal places)
-  - LLM Grade (A-F scale)
-- Features:
-  - Auto-adjusting row heights for content
-  - Horizontal scrolling for long content
-  - Selection highlighting
-  - Column width optimization:
-    - Fixed width for numeric columns (Similarity: 100px, Grade: 80px)
-    - Flexible width for text columns
+### 7.4 Evaluation Process
+The system must:
+- Show clear progress during evaluation
+- Process test cases sequentially
+- Update results in real-time
+- Provide error handling for:
+  - Failed evaluations
+  - Network issues
+  - Invalid configurations
 
-#### Analysis Panel
-- Collapsible panel with toggle button (▼/▶)
-- Tab interface with:
-  - Semantic Analysis tab
-    - Shows detailed similarity breakdown
-    - Highlights key differences
-  - LLM Feedback tab
-    - Shows structured feedback
-    - Includes grade explanation
-- Read-only text areas for analysis display
-
-### 7.3 Evaluation Process
-The interface must support:
-- Progress indication during evaluation
-  - Progress bar showing current/total test cases
-  - Disable run button during evaluation
-- Real-time updates
-  - Update table as each test case completes
-  - Show analysis for selected test case
-- Error handling
-  - Clear error messages for LLM failures
-  - Proper recovery from network issues
-  - Option to retry failed evaluations
-
-### 7.4 Visual Feedback
-- Color-coding for grades (optional future enhancement)
-- Visual indicators for similarity scores
-- Clear differentiation between baseline and current outputs
-- Loading states during analysis
-- Error states for failed evaluations
-
-### 7.5 Interaction Patterns
-- Single-click row selection for viewing analysis
-- Double-click cell for copying content
-- Keyboard navigation support
-- Tab order:
-  1. Test Set dropdown
-  2. Model dropdown
-  3. System Prompt
-  4. Run button
-  5. Results table
-  6. Analysis tabs
+### 7.5 Analysis Features
+For each evaluated test case:
+- Compare original and new outputs
+- Calculate similarity metrics
+- Provide LLM grader generated structured feedback
+- Allow detailed inspection of differences
 
 ### 7.6 State Management
-Must persist:
+The interface must maintain:
 - Selected test set
-- Selected model
-- System prompt content
-- Analysis panel expansion state
-- Table column widths
-- Selected row index
+- Chosen model
+- Modified system prompt
+- Evaluation results
 
-### 7.7 Performance Considerations
-- Efficient handling of large test sets
-- Smooth scrolling in results table
-- Responsive analysis updates
-- Proper cleanup of resources
-- Memory management for large outputs
+### 7.7 Report Generation
+The evaluation interface must support exporting results as detailed reports:
+- Report content must include:
+  - Test set identification
+  - Model and system prompt configurations
+  - Complete evaluation results with:
+    - Original prompts
+    - Baseline outputs
+    - Generated responses
+    - Similarity scores
+    - LLM evaluation grades
+- Reports must be:
+  - Easily readable in web browsers
+  - Self-contained for sharing
+  - Properly formatted for clarity
+  - Accessible for future reference
 
 ## 8. Test Set Manager Implementation
 

@@ -7,8 +7,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                               QComboBox, QPushButton, QTextEdit, QProgressBar,
                               QTableWidget, QTableWidgetItem, QMessageBox,
                               QGroupBox, QSplitter, QTabWidget,
-                              QHeaderView, QFileDialog)
-from PySide6.QtCore import Qt, Signal, QSettings
+                              QHeaderView, QFileDialog, QProgressDialog)
+from PySide6.QtCore import Qt, Signal, QSettings, QThread
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
@@ -19,7 +19,7 @@ from models import TestSet
 from test_storage import TestSetStorage
 from output_analyzer import (OutputAnalyzer, AnalysisResult, AnalysisError,
                            LLMError, SimilarityError)
-from llm_utils import run_llm_async, get_llm_models
+from llm_utils_adapter import LLMWorker
 from expandable_text import ExpandableTextWidget
 from html_eval_report import HtmlEvalReport
 
@@ -30,10 +30,23 @@ class EvaluationWidget(QWidget):
         self.test_set_storage = test_set_storage
         self.output_analyzer = OutputAnalyzer()
         self.current_test_set = None
-        self.current_llm_runner = None
-        self.current_analyzer = None
         self.pending_cases = []
         self.evaluation_results = []  # Store accumulated results
+        
+        # Initialize worker-related variables
+        self.worker_thread = None
+        self.worker = None
+        
+        # Connect analyzer signals
+        self.output_analyzer.finished.connect(
+            self._handle_analysis_result,
+            Qt.QueuedConnection
+        )
+        self.output_analyzer.error.connect(
+            lambda error: self._handle_error("Analysis Error", error),
+            Qt.QueuedConnection
+        )
+        
         self.setup_ui()
         
     def setup_ui(self):
@@ -69,12 +82,11 @@ class EvaluationWidget(QWidget):
         selector_layout.addWidget(model_label)
         self.model_combo = QComboBox()
         # Get available models dynamically
-        available_models = get_llm_models()
+        available_models = LLMWorker.get_models("llm-cmd")  # TODO: Get from config
         if available_models:
             self.model_combo.addItems(available_models)
         else:
-            # Fallback to default model if we can't get the list
-            self.model_combo.addItems(["gpt-4o-mini"])
+            self.model_combo.addItem("No models available")
         selector_layout.addWidget(self.model_combo)
         
         upper_layout.addLayout(selector_layout)
@@ -314,86 +326,134 @@ class EvaluationWidget(QWidget):
             
         i, test_case = self.pending_cases.pop(0)
         
-        # Start LLM generation
-        self.current_llm_runner = run_llm_async(
-            test_case.input_text,
-            self.system_prompt_input.toPlainText(),
-            model
+        # Clean up any existing worker first
+        self.cleanup_worker()
+        
+        # Create worker thread and worker
+        self.worker_thread = QThread()
+        system_prompt_text = self.system_prompt_input.toPlainText().strip()
+        self.worker = LLMWorker(
+            llm_api="llm-cmd",  # TODO: Get from config
+            model_name=model,
+            user_prompt=test_case.input_text,
+            system_prompt=system_prompt_text if system_prompt_text else None
         )
         
-        def handle_llm_result(current_output):
-            # Start analysis
-            analyzer = self.output_analyzer.create_async_analyzer()
-            analyzer.finished.connect(
-                lambda result: self._handle_analysis_result(i, result)
-            )
-            analyzer.error.connect(
-                lambda error: self._handle_error("Analysis Error", error)
-            )
-            
-            # Store reference to prevent garbage collection
-            self.current_analyzer = analyzer
-            
-            # Start the analysis
-            analyzer.start_analysis(
-                input_text=test_case.input_text,
-                baseline=test_case.baseline_output,
-                current=current_output,
-                model=model
-            )
-            
-        def handle_llm_error(error):
-            self._handle_error("LLM Error", error)
-            
-        self.current_llm_runner.finished.connect(handle_llm_result)
-        self.current_llm_runner.error.connect(handle_llm_error)
+        # Keep strong references
+        self.worker.thread = self.worker_thread  # Prevent thread from being GC'd
+        self.worker_thread.worker = self.worker  # Prevent worker from being GC'd
         
-    def _handle_analysis_result(self, row, result):
+        self.worker.moveToThread(self.worker_thread)
+        
+        # Connect cleanup to thread finished
+        self.worker_thread.finished.connect(self.cleanup_worker, Qt.QueuedConnection)
+        
+        # Connect signals
+        self.worker_thread.started.connect(self.worker.run, Qt.QueuedConnection)
+        self.worker.finished.connect(
+            lambda result: self.on_llm_finished(i, result),
+            Qt.QueuedConnection
+        )
+        self.worker.error.connect(
+            lambda error: self.on_llm_error(i, error),
+            Qt.QueuedConnection
+        )
+        self.worker.cancelled.connect(
+            lambda: self.on_llm_cancelled(i),
+            Qt.QueuedConnection
+        )
+        
+        # Start the thread
+        self.worker_thread.start()
+        
+    def on_llm_finished(self, row: int, result: str):
+        """Called when the LLM request finishes successfully."""
+        # Start analysis directly with our analyzer
+        test_case = self.current_test_set.cases[row]
+        
+        # Start the analysis
+        self.output_analyzer.start_analysis(
+            input_text=test_case.input_text,
+            baseline=test_case.baseline_output,
+            current=result,
+            model=self.model_combo.currentText()
+        )
+
+    def on_llm_error(self, row: int, error_msg: str):
+        """Called if an exception occurs in the LLM Worker."""
+        self.cleanup()
+        self._handle_error("LLM Error", error_msg)
+
+    def on_llm_cancelled(self, row: int):
+        """Called if the LLM task was cancelled."""
+        self.cleanup()
+        self.show_status("LLM request cancelled", 5000)
+
+    def cleanup(self):
+        """Cleanup all worker threads and resources."""
+        self.cleanup_worker()
+
+    def cleanup_worker(self):
+        """Clean up worker thread and worker."""
+        if self.worker_thread and self.worker_thread != QThread.currentThread():
+            if self.worker:
+                self.worker.cancel()  # Request cancellation first
+                self.worker = None  # Clear worker reference first
+            self.worker_thread.quit()
+            if not self.worker_thread.wait(1000):  # Wait up to 1 second
+                self.worker_thread.terminate()  # Force termination if thread doesn't respond
+            self.worker_thread = None
+
+    def _handle_analysis_result(self, result):
         """Handle completion of analysis for a test case."""
         try:
-            # Add row to results table
-            self.results_table.insertRow(row)
+            # Find the row for this result based on input text
+            for i, case in enumerate(self.current_test_set.cases):
+                if case.input_text == result.input_text:
+                    row = i
+                    break
+            else:
+                raise ValueError("Could not find matching test case for analysis result")
             
-            # Add items to the row
+            # Make sure the row exists
+            if self.results_table.rowCount() <= row:
+                self.results_table.setRowCount(row + 1)
+            
+            # Update results table with analysis
             self.results_table.setItem(row, 0, QTableWidgetItem(result.input_text))
             self.results_table.setItem(row, 1, QTableWidgetItem(result.baseline_output))
             self.results_table.setItem(row, 2, QTableWidgetItem(result.current_output))
             self.results_table.setItem(row, 3, QTableWidgetItem(f"{result.similarity_score:.2f}"))
             self.results_table.setItem(row, 4, QTableWidgetItem(result.llm_grade))
             
-            # Store result in accumulator
-            self.evaluation_results.append({
-                "input_text": result.input_text,
-                "baseline_output": result.baseline_output,
-                "current_output": result.current_output,
-                "similarity_score": result.similarity_score,
-                "llm_grade": result.llm_grade
-            })
+            # Store result
+            self.evaluation_results.append(result)
             
             # Update progress
-            self.progress_bar.setValue(row + 1)
+            self.progress_bar.setValue(len(self.evaluation_results))
             
-            # Process next case if any
-            model = self.model_combo.currentText()
-            self._process_next_case(model)
+            # Clean up the current worker before starting the next one
+            self.cleanup_worker()
             
+            # Process next case if any remain
+            if self.pending_cases:
+                self._process_next_case(self.model_combo.currentText())
+            else:
+                self._finish_evaluation()
         except Exception as e:
-            self._handle_error("Error handling analysis result", str(e))
-            
+            self._handle_error("Analysis Result Error", str(e))
+
     def _finish_evaluation(self):
         """Clean up after evaluation is complete."""
-        # Select the first row to show initial analysis
-        if self.results_table.rowCount() > 0:
-            self.results_table.selectRow(0)
-        
-        # Reset UI state
-        self.progress_bar.hide()
-        self.run_button.setEnabled(True)
-        self.export_button.setEnabled(True)  # Enable export button after completion
-        
-        # Show completion message
-        self.show_status("Evaluation run completed!", 5000)
-        
+        try:
+            self.cleanup()
+            self.progress_bar.hide()
+            self.run_button.setEnabled(True)
+            self.export_button.setEnabled(True)
+            self.show_status("Evaluation completed successfully!", 5000)
+        except Exception as e:
+            self._handle_error("Cleanup Error", str(e))
+            
     def _handle_error(self, title, message):
         """Handle errors during evaluation."""
         self.progress_bar.hide()

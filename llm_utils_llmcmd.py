@@ -39,7 +39,9 @@ def _build_llm_command(model: str, system_prompt: Optional[str] = None,
                 cmd.extend(["-o", key, str(value)])
         
     if system_prompt is not None:
-        cmd.extend(["-s", system_prompt])
+        # Escape any single quotes in the system prompt
+        escaped_system_prompt = system_prompt.replace("'", "'\"'\"'")
+        cmd.extend(["-s", "'" + escaped_system_prompt + "'"])
         
     return cmd
 
@@ -96,7 +98,6 @@ async def run_embed_async(embed_model: str, text: str) -> List[float]:
     
     # Log the command and input
     logger.info("Running async LLM embed command: %s", " ".join(cmd))
-    logger.info("Text: %s", text)
     
     process = await asyncio.create_subprocess_exec(
         *cmd,
@@ -106,9 +107,9 @@ async def run_embed_async(embed_model: str, text: str) -> List[float]:
     
     stdout, stderr = await process.communicate()
     
-    # Log raw output for debugging
-    logger.info("Embed command stdout: %s", stdout.decode() if stdout else "None")
-    logger.info("Embed command stderr: %s", stderr.decode() if stderr else "None")
+    # Log raw output for debugging (truncate to 70 chars)
+    logger.info("Embed command stdout: %s", (stdout.decode()[:70] + "...") if stdout else "None")
+    logger.info("Embed command stderr: %s", (stderr.decode()[:70] + "...") if stderr else "None")
     
     if process.returncode != 0:
         error_msg = stderr.decode().strip()
@@ -117,7 +118,12 @@ async def run_embed_async(embed_model: str, text: str) -> List[float]:
     # Parse the embedding output (assuming it's JSON formatted)
     try:
         stdout_str = stdout.decode().strip()
-        logger.info("Trying to parse JSON: %s", stdout_str)
+        # Show first 40 and last 40 chars if string is longer than 80 chars
+        if len(stdout_str) > 80:
+            truncated = f"{stdout_str[:40]}...{stdout_str[-40:]}"
+        else:
+            truncated = stdout_str
+        logger.info("Trying to parse JSON: %s", truncated)
         embedding_data = json.loads(stdout_str)
         return embedding_data  # Return raw list
     except json.JSONDecodeError as e:

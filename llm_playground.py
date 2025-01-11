@@ -194,7 +194,7 @@ class LLMPlaygroundWidget(QWidget):
         model_label = QLabel("Model:")
         self.model_combo = QComboBox()
         # Get available models dynamically
-        available_models = LLMWorker.get_models("llm-cmd")  # TODO: Get from config
+        available_models = LLMWorker.get_models()
         if available_models:
             self.model_combo.addItems(available_models)
         else:
@@ -355,7 +355,6 @@ class LLMPlaygroundWidget(QWidget):
             # Create worker thread and worker
             self.worker_thread = QThread()
             self.worker = LLMWorker(
-                llm_api="llm-cmd",  # TODO: Make this configurable
                 model_name=model,
                 user_prompt=processed_user_prompt,
                 system_prompt=processed_system_prompt,
@@ -467,7 +466,6 @@ class LLMPlaygroundWidget(QWidget):
             # Create worker thread and worker
             self.worker_thread = QThread()
             self.worker = LLMWorker(
-                llm_api="llm-cmd",  # TODO: Make this configurable
                 model_name=model,
                 user_prompt=overall_prompt,
                 system_prompt=pattern_prompt

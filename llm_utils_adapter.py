@@ -14,16 +14,18 @@ if project_root not in sys.path:
 import llm_utils_litellm
 import llm_utils_llmcmd
 
+# TODO: Replace with proper config
+DEFAULT_LLM_API = "llm-cmd"
+
 class LLMWorker(QObject):
     """Worker that runs llm_utils_xxx.run_llm_async in its own thread + event loop."""
     finished = Signal(str)
     error = Signal(str)
     cancelled = Signal()
     
-    def __init__(self, llm_api, model_name, user_prompt, system_prompt=None, model_params=None):
+    def __init__(self, model_name: str, user_prompt: str, system_prompt=None, model_params=None):
         super().__init__()
-        self.llm_api = llm_api
-        self.model_name = model_name
+        self.model_name = model_name or "gpt-4o-mini"
         self.user_prompt = user_prompt
         self.system_prompt = system_prompt
         self.model_params = model_params or {}
@@ -32,21 +34,18 @@ class LLMWorker(QObject):
         self._task = None
 
     @staticmethod
-    def get_models(llm_api: str) -> list[str]:
-        """Return a list of available models for the specified LLM API.
+    def get_models() -> list[str]:
+        """Return a list of available models for the configured LLM API.
         
-        Args:
-            llm_api: The LLM API to use ('llm-cmd' or 'litellm')
-            
         Returns:
-            A list of model names supported by the specified API.
+            A list of model names supported by the configured API.
         """
-        if llm_api == "llm-cmd":
+        if DEFAULT_LLM_API == "llm-cmd":
             return llm_utils_llmcmd.get_models()
-        elif llm_api == "litellm":
+        elif DEFAULT_LLM_API == "litellm":
             return llm_utils_litellm.get_models()
         else:
-            raise ValueError(f"Unsupported LLM API: {llm_api}")
+            raise ValueError(f"Unsupported LLM API: {DEFAULT_LLM_API}")
 
     @Slot()
     def run(self):
@@ -56,7 +55,7 @@ class LLMWorker(QObject):
             asyncio.set_event_loop(self._loop)
 
             # Schedule the LLM request as a Task so we can cancel it later
-            if self.llm_api == 'llm-cmd':
+            if DEFAULT_LLM_API == 'llm-cmd':
                self._task = self._loop.create_task(
                    llm_utils_llmcmd.run_llm_async(
                        self.model_name,
@@ -95,10 +94,9 @@ class LLMWorker(QObject):
     def cancel(self):
         """Request cancellation of the running task."""
         if self._loop and self._task and not self._task.done():
-            # Schedule the cancellation inside the worker’s event loop
+            # Schedule the cancellation inside the worker's event loop
             # so it happens safely from the worker thread.
             self._loop.call_soon_threadsafe(self._task.cancel)
-
             
 class EmbedWorker(QObject):
     """Worker that runs llm_utils_xxx.run_embed_async in its own thread + event loop."""
@@ -106,15 +104,14 @@ class EmbedWorker(QObject):
     error = Signal(str)
     cancelled = Signal()
     
-    def __init__(self, llm_api, embed_model, text):
+    def __init__(self, text: str):
         super().__init__()
-        self.llm_api = llm_api
-        self.embed_model = embed_model
+        self.embed_model = "3-large"
         self.text = text
         
         self._loop = None
         self._task = None
-
+        
     @Slot()
     def run(self):
         """Executed in the worker thread. We'll set up our own asyncio event loop here."""
@@ -123,14 +120,14 @@ class EmbedWorker(QObject):
             asyncio.set_event_loop(self._loop)
 
             # Schedule the embed model request as a Task so we can cancel it later
-            if self.llm_api == 'llm-cmd':
+            if DEFAULT_LLM_API == 'llm-cmd':
                self._task = self._loop.create_task(
                    llm_utils_llmcmd.run_embed_async(self.embed_model, self.text)
                )
             else:
-               self._task = self._loop.create_task(
+                self._task = self._loop.create_task(
                    llm_utils_litellm.run_embed_async(self.embed_model, self.text)
-               )
+               )            
 
             # Run the event loop until the task completes (or is cancelled)
             result = self._loop.run_until_complete(self._task)
@@ -154,6 +151,6 @@ class EmbedWorker(QObject):
     def cancel(self):
         """Request cancellation of the running task."""
         if self._loop and self._task and not self._task.done():
-            # Schedule the cancellation inside the worker’s event loop
+            # Schedule the cancellation inside the worker's event loop
             # so it happens safely from the worker thread.
             self._loop.call_soon_threadsafe(self._task.cancel)

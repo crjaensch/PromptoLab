@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTableWidget, QTableWidgetItem, QTextEdit, 
                               QComboBox, QLabel, QLineEdit, QHeaderView, QDialog, 
                               QDialogButtonBox, QProgressDialog)
-from PySide6.QtCore import Qt, Signal, QObject, QSettings
+from PySide6.QtCore import Qt, Signal, QObject, QSettings, QThread
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
@@ -15,7 +15,7 @@ if project_root not in sys.path:
 
 from models import TestSet, TestCase
 from test_storage import TestSetStorage
-from llm_utils import run_llm_async
+from llm_utils_adapter import LLMWorker
 from expandable_text import ExpandableTextWidget
 
 class BaselineGeneratorSignals(QObject):
@@ -42,29 +42,45 @@ class BaselineGeneratorWorker(QObject):
         self.temperature = temperature
         self.top_p = top_p
         self._test_runner = None  # For testing only
+        self._worker = None
+        self._thread = None
         
     def start(self):
         """Start the baseline generation process."""
-        # Use test runner if provided (for testing only)
-        if self._test_runner is not None:
-            runner = self._test_runner
-        else:
-            runner = run_llm_async(
-                self.user_prompt,
-                self.system_prompt,
-                self.model,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                top_p=self.top_p
+        try:
+            # Create worker thread
+            self._thread = QThread()
+            self._worker = LLMWorker(
+                model_name=self.model,
+                user_prompt=self.user_prompt,
+                system_prompt=self.system_prompt,
+                model_params={
+                    'temperature': self.temperature,
+                    'max_tokens': self.max_tokens,
+                    'top_p': self.top_p
+                }
             )
-        
-        # Connect signals
-        runner.finished.connect(self._handle_result)
-        runner.error.connect(self.error.emit)
+            self._worker.moveToThread(self._thread)
+            self._worker.finished.connect(self._handle_result)
+            self._worker.error.connect(self.error.emit)
+            self._thread.started.connect(self._worker.run)
+            
+            # Start thread
+            self._thread.start()
+            
+        except Exception as e:
+            self.error.emit(f"Error starting baseline generation: {str(e)}")
         
     def _handle_result(self, result):
         self.result.emit(self.row, result)
         self.finished.emit()
+        
+        # Clean up
+        if self._thread:
+            self._thread.quit()
+            self._thread.wait()
+            self._thread = None
+            self._worker = None
 
 class TestSetManagerWidget(QWidget):
     test_set_updated = Signal(TestSet)  # Emitted when test set is modified

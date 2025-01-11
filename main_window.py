@@ -54,6 +54,7 @@ class MainWindow(QMainWindow):
         # Connect signals
         self.test_set_manager.test_set_updated.connect(self.evaluation_widget.update_test_set)
         self.prompts_catalog.prompt_selected_for_eval.connect(self.on_prompt_selected_for_eval)
+        self.evaluation_widget.status_changed.connect(self.show_status)
         
         # Load initial data after signals are connected
         self.prompts_catalog.load_prompts()

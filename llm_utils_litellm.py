@@ -77,9 +77,17 @@ async def run_llm_async(
         messages=messages,
         **model_params
     )
-    result: str = await loop.run_in_executor(None, completion_func)
+    result = await loop.run_in_executor(None, completion_func)
 
-    return result
+    # Extract the actual response text from the completion result
+    if hasattr(result, 'choices') and len(result.choices) > 0:
+        response = result.choices[0].message.content
+    else:
+        logger.error("Unexpected response format from LiteLLM: %s", result)
+        raise ValueError("Unexpected response format from LiteLLM")
+
+    logger.info("Received response from LiteLLM")
+    return response
 
 
 async def run_embed_async(embed_model: str, text: str) -> List[float]:

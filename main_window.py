@@ -1,7 +1,8 @@
 import sys
 from pathlib import Path
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QVBoxLayout
-from PySide6.QtCore import QSettings
+from PySide6.QtWidgets import (QMainWindow, QTabWidget, QWidget, QVBoxLayout,
+                              QMenuBar, QMenu)
+from PySide6.QtCore import QSettings, Slot
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
@@ -14,6 +15,7 @@ from test_set_manager import TestSetManagerWidget
 from evaluation_widget import EvaluationWidget
 from storage import FileStorage
 from test_storage import TestSetStorage
+from settings_dialog import SettingsDialog
 
 class MainWindow(QMainWindow):
     def __init__(self, prompt_storage: FileStorage, test_set_storage: TestSetStorage):
@@ -59,6 +61,24 @@ class MainWindow(QMainWindow):
         # Load initial data after signals are connected
         self.prompts_catalog.load_prompts()
         
+        self.setup_menu()
+        
+    def setup_menu(self):
+        menubar = self.menuBar()
+        
+        # File menu
+        file_menu = menubar.addMenu("File")
+        file_menu.addAction("Exit", self.close)
+        
+        # Settings menu
+        settings_menu = menubar.addMenu("Settings")
+        settings_menu.addAction("Configure...", self.show_settings)
+        
+    @Slot()
+    def show_settings(self):
+        dialog = SettingsDialog(self)
+        dialog.exec()
+
     def closeEvent(self, event):
         """Save settings when closing the window."""
         self.settings.sync()

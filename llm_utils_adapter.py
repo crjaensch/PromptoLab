@@ -6,6 +6,7 @@ import json
 from PySide6.QtCore import Signal, Slot, QObject, Qt
 from pathlib import Path
 
+
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
 if project_root not in sys.path:
@@ -13,9 +14,7 @@ if project_root not in sys.path:
 
 import llm_utils_litellm
 import llm_utils_llmcmd
-
-# TODO: Replace with proper config
-DEFAULT_LLM_API = "llm-cmd"
+from config import config
 
 class LLMWorker(QObject):
     """Worker that runs llm_utils_xxx.run_llm_async in its own thread + event loop."""
@@ -40,12 +39,12 @@ class LLMWorker(QObject):
         Returns:
             A list of model names supported by the configured API.
         """
-        if DEFAULT_LLM_API == "llm-cmd":
+        if config.llm_api == "llm-cmd":
             return llm_utils_llmcmd.get_models()
-        elif DEFAULT_LLM_API == "litellm":
+        elif config.llm_api == "litellm":
             return llm_utils_litellm.get_models()
         else:
-            raise ValueError(f"Unsupported LLM API: {DEFAULT_LLM_API}")
+            raise ValueError(f"Unsupported LLM API: {config.llm_api}")
 
     @Slot()
     def run(self):
@@ -55,7 +54,7 @@ class LLMWorker(QObject):
             asyncio.set_event_loop(self._loop)
 
             # Schedule the LLM request as a Task so we can cancel it later
-            if DEFAULT_LLM_API == 'llm-cmd':
+            if config.llm_api == 'llm-cmd':
                self._task = self._loop.create_task(
                    llm_utils_llmcmd.run_llm_async(
                        self.model_name,
@@ -145,7 +144,7 @@ class EmbedWorker(QObject):
             asyncio.set_event_loop(self._loop)
 
             # Schedule the embed model request as a Task so we can cancel it later
-            if DEFAULT_LLM_API == 'llm-cmd':
+            if config.llm_api == 'llm-cmd':
                self._task = self._loop.create_task(
                    llm_utils_llmcmd.run_embed_async(self.embed_model, self.text)
                )

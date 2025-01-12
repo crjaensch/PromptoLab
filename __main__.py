@@ -13,6 +13,7 @@ if project_root not in sys.path:
 from main_window import MainWindow
 from storage import FileStorage
 from test_storage import TestSetStorage
+from config import config  # Import the config module
 
 # Define the base directory for prompts and test_sets
 try:
@@ -100,6 +101,10 @@ def setup_storage():
     # Initialize storage systems with the correct paths
     prompt_storage = FileStorage(str(prompts_dir))
     test_set_storage = TestSetStorage(str(test_sets_dir))
+    
+    # Log the current LLM API configuration
+    logger.info(f"Using LLM API: {config.llm_api}")
+    
     return prompt_storage, test_set_storage
 
 def main():

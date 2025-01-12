@@ -28,6 +28,22 @@ DEFAULT_MODELS = [
     "Undefined",
 ]
 
+class LLMError(Exception):
+    """Base class for LLM-related errors."""
+    pass
+
+class LLMQuotaError(LLMError):
+    """Raised when the LLM API quota is exhausted."""
+    pass
+
+class LLMCapabilityError(LLMError):
+    """Raised when the model doesn't support requested features."""
+    pass
+
+class LLMConnectionError(LLMError):
+    """Raised when there are connection/network issues."""
+    pass
+
 def _build_llm_command(model: str, system_prompt: Optional[str] = None,
                     model_params: Optional[Dict[str, Any]] = None) -> list[str]:
     """Build the LLM command with all necessary parameters."""
@@ -53,12 +69,21 @@ async def run_llm_async(
 ) -> str:
     """
     Asynchronously run a completion call using the llm command line tool.
-
-    :param model_name: The name of the model to use (e.g. 'gpt-4o-mini').
-    :param user_prompt: The user prompt text.
-    :param system_prompt: (Optional) A system prompt / context to guide the model.
-    :param model_params: (Optional) Dictionary of additional model parameters, if any.
-    :return: The generated text from the model.
+    
+    Args:
+        model_name: The name of the model to use (e.g. 'gpt-4o-mini')
+        user_prompt: The user prompt text
+        system_prompt: Optional system prompt / context
+        model_params: Optional dictionary of additional model parameters
+        
+    Returns:
+        The generated text from the model
+        
+    Raises:
+        LLMQuotaError: When API quota is exhausted
+        LLMCapabilityError: When model doesn't support requested features
+        LLMConnectionError: When there are connection issues
+        LLMError: For other LLM-related errors
     """
     cmd = _build_llm_command(model_name, system_prompt, model_params)
     
@@ -80,7 +105,15 @@ async def run_llm_async(
     
     if process.returncode != 0:
         error_msg = stderr.decode().strip()
-        raise RuntimeError(f"LLM command failed: {error_msg}")
+        
+        if "Resource has been exhausted" in error_msg:
+            raise LLMQuotaError("API quota exceeded. Please try again later or check your subscription limits.")
+        elif "Model does not support system prompts" in error_msg:
+            raise LLMCapabilityError(f"Model '{model_name}' doesn't support system prompts. Try a different model or remove the system prompt.")
+        elif any(term in error_msg.lower() for term in ["connection", "timeout", "network"]):
+            raise LLMConnectionError("Connection error. Please check your internet connection and try again.")
+        else:
+            raise LLMError(f"LLM command failed: {error_msg}")
     
     return stdout.decode().strip()
 

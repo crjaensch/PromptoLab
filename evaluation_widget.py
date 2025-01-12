@@ -26,6 +26,9 @@ from html_eval_report import HtmlEvalReport
 class EvaluationWidget(QWidget):
     test_set_updated = Signal(TestSet)  # Signal emitted when test set is updated
     status_changed = Signal(str, int)  # Signal for status bar updates (message, timeout)
+    error_occurred = Signal(str, str)  # New signal for error handling
+    progress_updated = Signal(int)     # New signal for progress updates
+    table_updated = Signal(int, object)  # New signal for table updates
     
     def __init__(self, test_set_storage: TestSetStorage, settings: QSettings, parent=None):
         super().__init__(parent)
@@ -37,22 +40,29 @@ class EvaluationWidget(QWidget):
         self.current_analyzer = None
         self.pending_cases = []
         self.evaluation_results = []  # Store accumulated results
-        self.active_threads = []  # Keep track of active threads
+        self.active_threads = []      # Keep track of active threads
+        
+        # Connect signals using queued connection for thread safety
+        self.error_occurred.connect(self._show_error_dialog, Qt.ConnectionType.QueuedConnection)
+        self.progress_updated.connect(self._update_progress, Qt.ConnectionType.QueuedConnection)
+        self.table_updated.connect(self._update_table, Qt.ConnectionType.QueuedConnection)
+        
         self.setup_ui()
         
     def cleanup_threads(self):
         """Clean up any running worker threads."""
-        for thread in self.active_threads:
-            if thread.isRunning():
-                thread.quit()
-                thread.wait()  # Wait for thread to finish
-        self.active_threads.clear()
-        
-        # Clean up current analyzer if it exists
+        # First cleanup the analyzer if it exists
         if self.current_analyzer:
             self.current_analyzer.cleanup()
             self.current_analyzer = None
-        
+            
+        # Then safely cleanup threads
+        for thread in self.active_threads[:]:  # Create a copy of the list to avoid modification during iteration
+            if thread.isRunning():
+                thread.quit()
+                thread.wait(1000)  # Wait up to 1 second
+        self.active_threads.clear()
+
     def closeEvent(self, event):
         """Handle widget close event."""
         self.cleanup_threads()
@@ -330,13 +340,9 @@ class EvaluationWidget(QWidget):
             
     def _process_next_case(self, model):
         """Process the next test case in the queue."""
-        if not self.pending_cases:
-            self._finish_evaluation()
-            return
-            
         i, test_case = self.pending_cases.pop(0)
         
-        # Create worker thread
+        # Create worker in new thread
         worker_thread = QThread()
         worker = LLMWorker(
             model_name=model,
@@ -344,10 +350,6 @@ class EvaluationWidget(QWidget):
             system_prompt=self.system_prompt_input.toPlainText().strip() or None
         )
         worker.moveToThread(worker_thread)
-        
-        # Keep strong references to prevent garbage collection
-        worker.thread = worker_thread  # Prevent thread from being GC'd
-        worker_thread.worker = worker  # Prevent worker from being GC'd
         
         # Keep track of thread for cleanup
         self.active_threads.append(worker_thread)
@@ -365,7 +367,7 @@ class EvaluationWidget(QWidget):
         
         # Start thread
         worker_thread.start()
-
+        
     def handle_llm_result(self, current_output):
         """Handle LLM result and start analysis."""
         try:
@@ -395,30 +397,28 @@ class EvaluationWidget(QWidget):
             # Store result
             self.evaluation_results.append(result)
             
-            # Update progress
-            self.progress_bar.setValue(len(self.evaluation_results))
+            # Emit signals for UI updates
+            self.progress_updated.emit(len(self.evaluation_results))
+            self.table_updated.emit(row, result)
             
-            # Update table
-            self.results_table.setRowCount(len(self.evaluation_results))
-            self._update_table_row(row, result)
-            
-            # Clean up current workers
-            if self.current_llm_runner:
-                if self.current_llm_runner.thread:
-                    self.current_llm_runner.thread.quit()
-                    self.current_llm_runner.thread.wait()
-                self.current_llm_runner = None
-                
-            if self.current_analyzer:
-                self.current_analyzer.cleanup()
-                self.current_analyzer = None
-            
-            # Process next case
-            self._process_next_case(self.model_combo.currentText())
+            # Process next case or finish
+            if self.pending_cases:
+                self._process_next_case(self.model_combo.currentText())
+            else:
+                self._finish_evaluation()
             
         except Exception as e:
             self._handle_error("Error handling analysis result", str(e))
             
+    def _update_progress(self, value):
+        """Update progress bar from main thread"""
+        self.progress_bar.setValue(value)
+        
+    def _update_table(self, row, result):
+        """Update table from main thread"""
+        self.results_table.setRowCount(len(self.evaluation_results))
+        self._update_table_row(row, result)
+        
     def _update_table_row(self, row, result):
         """Update a row in the results table."""
         self.results_table.setItem(row, 0, QTableWidgetItem(result.input_text))
@@ -442,20 +442,25 @@ class EvaluationWidget(QWidget):
         self.show_status("Evaluation run completed!", 5000)
         
     def _handle_error(self, title, message):
-        """Handle errors during evaluation."""
+        """Handle errors during evaluation by emitting signal."""
+        self.error_occurred.emit(title, message)
+    
+    def _show_error_dialog(self, title, message):
+        """Show error dialog on the main thread."""
         self.progress_bar.hide()
         self.run_button.setEnabled(True)
-        self.export_button.setEnabled(len(self.evaluation_results) > 0)  # Only enable if we have results
+        self.export_button.setEnabled(len(self.evaluation_results) > 0)
         QMessageBox.critical(self, title, 
-                           f"{title}: {message}\n\n"
-                           "Please check your inputs and try again.")
+                          f"{title}: {message}\n\n"
+                          "Please check your inputs and try again.")
         
     def show_status(self, message, timeout=5000):
         """Show a status message in the main window's status bar."""
         main_window = self.window()
         if main_window is not self and main_window and hasattr(main_window, 'show_status'):
             # Use invokeMethod to ensure thread-safe status update
-            QMetaObject.invokeMethod(main_window, "show_status",
+            QMetaObject.invokeMethod(main_window, 
+                                   "show_status",
                                    Qt.ConnectionType.QueuedConnection,
                                    Q_ARG(str, message),
                                    Q_ARG(int, timeout))

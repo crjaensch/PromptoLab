@@ -81,9 +81,13 @@ class MockRunner(QObject):
         super().__init__()
         self.process = MagicMock()
 
+    def run(self):
+        """Simulate the run method of LLMWorker."""
+        self.finished.emit("Generated baseline output")
+
 @patch('test_set_manager.QProgressDialog')
-@patch('test_set_manager.run_llm_async')
-def test_generate_baseline(mock_run_llm, mock_progress_dialog, qtbot, manager_widget):
+@patch('test_set_manager.LLMWorker')
+def test_generate_baseline(mock_llm_worker, mock_progress_dialog, qtbot, manager_widget):
     """Test generating baseline outputs for test cases."""
     # Setup mock progress dialog
     progress = mock_progress_dialog.return_value
@@ -100,79 +104,50 @@ def test_generate_baseline(mock_run_llm, mock_progress_dialog, qtbot, manager_wi
         return settings.get(key, default)
     manager_widget.settings.value = mock_settings_value
 
-    # 1. Setup a TestSet with 2 test cases
-    test_set = TestSet(
-        name="Test Set",
-        system_prompt="You are a helpful assistant that provides concise answers.",
-        cases=[
-            TestCase(
-                input_text="What is the capital of France?",
-                baseline_output="",
-                created_at=datetime.now()
-            ),
-            TestCase(
-                input_text="What is the square root of 16?",
-                baseline_output="",
-                created_at=datetime.now()
-            )
-        ],
-        created_at=datetime.now(),
-        last_modified=datetime.now()
+    # Add test cases
+    test_prompts = ["Test prompt 1", "Test prompt 2"]
+    for prompt in test_prompts:
+        qtbot.mouseClick(manager_widget.add_case_btn, Qt.LeftButton)
+        row = manager_widget.cases_table.rowCount() - 1
+        manager_widget.cases_table.setItem(row, 0, QTableWidgetItem(prompt))
+
+    # Setup mock LLMWorker
+    mock_worker = MockRunner()
+    mock_llm_worker.return_value = mock_worker
+
+    # Set system prompt
+    system_prompt = "Test system prompt"
+    manager_widget.system_prompt.setPlainText(system_prompt)
+
+    # Start baseline generation
+    qtbot.mouseClick(manager_widget.generate_baseline_btn, Qt.LeftButton)
+
+    # Verify progress dialog creation
+    mock_progress_dialog.assert_called_once_with(
+        "Generating baseline outputs...", 
+        "Cancel", 
+        0, 
+        len(test_prompts),
+        manager_widget
     )
+    progress.setWindowModality.assert_called_once()
 
-    # Load test set into widget
-    manager_widget.current_test_set = test_set
-    manager_widget.name_input.setText(test_set.name)
-    manager_widget.system_prompt.setPlainText(test_set.system_prompt)
+    # Verify LLMWorker creation and usage
+    assert mock_llm_worker.call_count == len(test_prompts)
+    for i, call in enumerate(mock_llm_worker.call_args_list):
+        args, kwargs = call
+        assert kwargs["model_name"] == "gpt-4o-mini"
+        assert kwargs["user_prompt"] == test_prompts[i]
+        assert kwargs["system_prompt"] == system_prompt
 
-    # Add cases to table
-    for case in test_set.cases:
-        row = manager_widget.cases_table.rowCount()
-        manager_widget.cases_table.insertRow(row)
-        manager_widget.cases_table.setItem(row, 0, QTableWidgetItem(case.input_text))
-        manager_widget.cases_table.setItem(row, 1, QTableWidgetItem(case.baseline_output))
+    # Emit results for each test case
+    for i in range(len(test_prompts)):
+        mock_worker.finished.emit("Generated baseline output")
+        qtbot.wait(100)  # Wait for signal processing
 
-    # 2. Setup mock LLM runner that produces baseline outputs
-    mock_runner = MagicMock()
-    mock_run_llm.return_value = mock_runner
-
-    # Generate baseline
-    manager_widget.generate_baseline()
-
-    # Verify LLM was called with correct arguments
-    assert mock_run_llm.call_count == len(test_set.cases)
-    for i, call_args in enumerate(mock_run_llm.call_args_list):
-        args = call_args[0]
-        assert args[0] == test_set.cases[i].input_text
-        assert args[1] == test_set.system_prompt
-
-    # 3. Simulate LLM responses and verify table updates
-    expected_outputs = [
-        "Paris is the capital of France.",
-        "The square root of 16 is 4."
-    ]
-    
-    # Wait for workers to be created
-    qtbot.wait(100)
-    
-    # Verify workers were created
-    assert len(manager_widget.active_workers) == len(test_set.cases)
-    
-    # Simulate LLM responses for each worker
-    for i, output in enumerate(expected_outputs):
-        # Get the worker for this test case
-        worker = manager_widget.active_workers[i]
-        # Simulate worker result
-        worker.result.emit(i, output)
-        # Wait for signal to be processed
-        qtbot.wait(100)
-        # Verify table was updated with the baseline output
-        assert manager_widget.cases_table.item(i, 1).text() == output
-        # Verify progress was updated
-        assert manager_widget.completed_tasks == i + 1
-
-    # Verify final status
-    assert manager_widget.completed_tasks == len(test_set.cases)
+    # Verify results in table
+    for i in range(len(test_prompts)):
+        assert manager_widget.cases_table.item(i, 1).text() == "Generated baseline output"
 
 @patch('test_set_manager.TestSetStorage')
 def test_save_load_test_set(mock_storage, qtbot, manager_widget):

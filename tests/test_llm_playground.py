@@ -11,7 +11,7 @@ project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from llm_playground import LLMPlaygroundWidget
+from llm_playground import LLMPlaygroundWidget, LLMWorker
 from models import Prompt, PromptType
 
 @pytest.fixture
@@ -98,17 +98,36 @@ class MockRunner(QObject):
     """Mock runner for LLM async operations."""
     finished = Signal(str)
     error = Signal(str)
+    cancelled = Signal()
     
     def __init__(self):
         super().__init__()
-        self.process = MagicMock()
+        self._thread = None
+        self._should_succeed = True
+    
+    def moveToThread(self, thread):
+        """Mock moveToThread."""
+        self._thread = thread
+    
+    def run(self):
+        """Simulate the run method of LLMWorker."""
+        if self._should_succeed:
+            self.finished.emit("Test response")
+        
+    def cancel(self):
+        """Simulate the cancel method of LLMWorker."""
+        self.cancelled.emit()
 
-@patch('llm_playground.run_llm_async')
-def test_submit_prompt(mock_run_llm, playground_widget, qtbot):
+@patch('llm_playground.QThread')
+@patch('llm_playground.LLMWorker')
+def test_submit_prompt(mock_llm_worker, mock_thread, playground_widget, qtbot):
     """Test running the playground with a basic prompt."""
-    # Set up mock
-    mock_runner = MockRunner()
-    mock_run_llm.return_value = mock_runner
+    # Set up mock thread
+    thread = mock_thread.return_value
+    
+    # Set up mock worker
+    mock_worker = MockRunner()
+    mock_llm_worker.return_value = mock_worker
     
     # Set input text
     playground_widget.user_prompt.setPlainText("Test prompt")
@@ -116,25 +135,34 @@ def test_submit_prompt(mock_run_llm, playground_widget, qtbot):
     # Run playground
     playground_widget.submit_prompt()
     
-    # Verify LLM was called
-    mock_run_llm.assert_called_once()
-    args = mock_run_llm.call_args[0]
-    assert args[0] == "Test prompt"  # user_prompt
-    assert args[1] is None  # system_prompt
+    # Verify LLMWorker was created with correct parameters
+    mock_llm_worker.assert_called_once()
+    args, kwargs = mock_llm_worker.call_args
+    assert kwargs["user_prompt"] == "Test prompt"
+    assert kwargs["system_prompt"] is None
+    assert kwargs["model_name"] == "gpt-4o-mini"
+    
+    # Verify thread setup
+    assert mock_thread.called
+    assert thread.start.called
     
     # Emit result
-    mock_runner.finished.emit("Test response")
+    mock_worker.finished.emit("Test response")
     qtbot.wait(100)
     
     # Check output
     assert playground_widget.playground_output.toPlainText() == "Test response"
 
-@patch('llm_playground.run_llm_async')
-def test_submit_prompt_with_system_prompt(mock_run_llm, playground_widget, qtbot):
+@patch('llm_playground.QThread')
+@patch('llm_playground.LLMWorker')
+def test_submit_prompt_with_system_prompt(mock_llm_worker, mock_thread, playground_widget, qtbot):
     """Test running the playground with a system prompt."""
-    # Set up mock
-    mock_runner = MockRunner()
-    mock_run_llm.return_value = mock_runner
+    # Set up mock thread
+    thread = mock_thread.return_value
+    
+    # Set up mock worker
+    mock_worker = MockRunner()
+    mock_llm_worker.return_value = mock_worker
     
     # Set input text and system prompt
     playground_widget.user_prompt.setPlainText("Test prompt")
@@ -144,25 +172,34 @@ def test_submit_prompt_with_system_prompt(mock_run_llm, playground_widget, qtbot
     # Run playground
     playground_widget.submit_prompt()
     
-    # Verify LLM was called with system prompt
-    mock_run_llm.assert_called_once()
-    args = mock_run_llm.call_args[0]
-    assert args[0] == "Test prompt"  # user_prompt
-    assert args[1] == "Test system prompt"  # system_prompt
+    # Verify LLMWorker was created with correct parameters
+    mock_llm_worker.assert_called_once()
+    args, kwargs = mock_llm_worker.call_args
+    assert kwargs["user_prompt"] == "Test prompt"
+    assert kwargs["system_prompt"] == "Test system prompt"
+    assert kwargs["model_name"] == "gpt-4o-mini"
+    
+    # Verify thread setup
+    assert mock_thread.called
+    assert thread.start.called
     
     # Emit result
-    mock_runner.finished.emit("Test response")
+    mock_worker.finished.emit("Test response")
     qtbot.wait(100)
     
     # Check output
     assert playground_widget.playground_output.toPlainText() == "Test response"
 
-@patch('llm_playground.run_llm_async')
-def test_improve_prompt(mock_run_llm, playground_widget, qtbot):
+@patch('llm_playground.QThread')
+@patch('llm_playground.LLMWorker')
+def test_improve_prompt(mock_llm_worker, mock_thread, playground_widget, qtbot):
     """Test the improve prompt functionality."""
-    # Set up mock
-    mock_runner = MockRunner()
-    mock_run_llm.return_value = mock_runner
+    # Set up mock thread
+    thread = mock_thread.return_value
+    
+    # Set up mock worker
+    mock_worker = MockRunner()
+    mock_llm_worker.return_value = mock_worker
     
     # Set input text and ensure TAG pattern is selected (default)
     playground_widget.user_prompt.setPlainText("Test prompt")
@@ -171,32 +208,51 @@ def test_improve_prompt(mock_run_llm, playground_widget, qtbot):
     # Run improve prompt
     playground_widget.improve_prompt()
     
-    # Verify LLM was called with TAG pattern
-    mock_run_llm.assert_called_once()
-    args = mock_run_llm.call_args[0]
-    assert '<original_prompt>\n User: Test prompt\n</original_prompt>' == args[0]  # exact format match
-    assert "task-action-guideline" in args[1].lower()  # TAG pattern should be used
+    # Verify LLMWorker was created with TAG pattern
+    mock_llm_worker.assert_called_once()
+    args, kwargs = mock_llm_worker.call_args
     
-    # Test switching to PIC pattern
-    mock_run_llm.reset_mock()
-    playground_widget.pattern_combo.setCurrentText("PIC")
+    # Verify user prompt format
+    expected_user_prompt = "<original_prompt>\n User: Test prompt\n</original_prompt>"
+    assert kwargs["user_prompt"] == expected_user_prompt
+    
+    # Verify system prompt (pattern)
+    assert "task-action-guideline" in kwargs["system_prompt"].lower()
+    assert kwargs["model_name"] == "gpt-4o-mini"
+    
+    # Verify thread setup
+    assert mock_thread.called
+    assert thread.start.called
+    
+    # Test with system prompt
+    mock_llm_worker.reset_mock()
+    mock_thread.reset_mock()
+    playground_widget.system_prompt.setPlainText("Test system prompt")
+    playground_widget.system_prompt_checkbox.setChecked(True)
     playground_widget.improve_prompt()
     
-    # Verify LLM was called with PIC pattern
-    args = mock_run_llm.call_args[0]
-    assert "persona-instruction-context" in args[1].lower()  # PIC pattern should be used
+    # Verify combined prompt format with system prompt
+    args, kwargs = mock_llm_worker.call_args
+    expected_user_prompt = "<original_prompt>\nSystem: Test system prompt\n\nUser: Test prompt\n</original_prompt>"
+    assert kwargs["user_prompt"] == expected_user_prompt
     
-    # Test switching to LIFE pattern
-    mock_run_llm.reset_mock()
-    playground_widget.pattern_combo.setCurrentText("LIFE")
-    playground_widget.improve_prompt()
-    
-    # Verify LLM was called with LIFE pattern
-    args = mock_run_llm.call_args[0]
-    assert "learn-improvise-feedback-evaluate" in args[1].lower()  # LIFE pattern should be used
+    # Test different patterns
+    for pattern, expected_text in [
+        ("PIC", "persona-instruction-context"),
+        ("LIFE", "learn-improvise-feedback-evaluate")
+    ]:
+        mock_llm_worker.reset_mock()
+        mock_thread.reset_mock()
+        playground_widget.pattern_combo.setCurrentText(pattern)
+        playground_widget.improve_prompt()
+        
+        args, kwargs = mock_llm_worker.call_args
+        assert expected_text in kwargs["system_prompt"].lower()
+        assert mock_thread.called
+        assert thread.start.called
     
     # Emit result and verify output
-    mock_runner.finished.emit("Improved test prompt")
+    mock_worker.finished.emit("Improved test prompt")
     qtbot.wait(100)
     assert "Improved test prompt" in playground_widget.playground_output.toPlainText()
 
@@ -244,12 +300,13 @@ def test_save_load_state(qtbot, playground_widget, settings):
     assert new_widget.top_p_combo.currentText() == "0.9"
     assert new_widget.system_prompt.toPlainText() == "Test system prompt"
 
-@patch('llm_playground.run_llm_async')
-def test_llm_error_handling(mock_run_llm, playground_widget, qtbot):
+@patch('llm_playground.LLMWorker')
+def test_llm_error_handling(mock_llm_worker, playground_widget, qtbot):
     """Test error handling during LLM processing."""
     # Set up mock
-    mock_runner = MockRunner()
-    mock_run_llm.return_value = mock_runner
+    mock_worker = MockRunner()
+    mock_worker._should_succeed = False  # Prevent automatic success response
+    mock_llm_worker.return_value = mock_worker
     
     # Set input text
     playground_widget.user_prompt.setPlainText("Test prompt")
@@ -258,7 +315,7 @@ def test_llm_error_handling(mock_run_llm, playground_widget, qtbot):
     playground_widget.submit_prompt()
     
     # Emit error
-    mock_runner.error.emit("Test error message")
+    mock_worker.error.emit("Test error message")
     qtbot.wait(100)
     
     # Check error is displayed in output
@@ -273,7 +330,7 @@ def test_save_as_new_prompt(playground_widget, qtbot):
     
     # Simulate successful LLM response for improve prompt
     mock_runner = MockRunner()
-    with patch('llm_playground.run_llm_async', return_value=mock_runner):
+    with patch('llm_playground.LLMWorker', return_value=mock_runner):
         playground_widget.improve_prompt()
         mock_runner.finished.emit("Improved test response")
         qtbot.wait(100)
@@ -297,32 +354,40 @@ def test_compact_mode_toggle(playground_widget, qtbot):
     # Verify contracted state
     assert not playground_widget.playground_output.is_expanded
 
-@patch('llm_playground.QProgressDialog', autospec=True)
+@patch('llm_playground.QProgressDialog')
 def test_progress_dialog(mock_progress_dialog, playground_widget, qtbot):
     """Test progress dialog functionality."""
-    # Set up mock dialog
-    mock_dialog = MagicMock()
-    mock_progress_dialog.return_value = mock_dialog
+    # Set up mock
+    progress = mock_progress_dialog.return_value
+    progress.wasCanceled.return_value = False
     
-    # Set up mock runner
-    mock_runner = MockRunner()
-    with patch('llm_playground.run_llm_async', return_value=mock_runner):
-        # Submit prompt to trigger progress dialog
-        playground_widget.user_prompt.setPlainText("Test prompt")
+    # Set input text
+    playground_widget.user_prompt.setPlainText("Test prompt")
+    
+    # Run playground with mock LLMWorker
+    mock_worker = MockRunner()
+    with patch('llm_playground.LLMWorker', return_value=mock_worker):
         playground_widget.submit_prompt()
         
-        # Verify progress dialog was created with correct parameters
+        # Verify progress dialog creation
         mock_progress_dialog.assert_called_once_with(
-            "Running LLM...", "Cancel", 0, 0, playground_widget
+            "Running LLM...",
+            "Cancel",
+            0,
+            0,
+            playground_widget
         )
         
-        # Verify dialog was configured correctly
-        mock_dialog.setWindowModality.assert_called_once_with(Qt.WindowModal)
-        mock_dialog.setMinimumDuration.assert_called_once_with(400)
+        # Verify progress dialog configuration
+        progress.setWindowModality.assert_called_once_with(Qt.WindowModal)
+        progress.setMinimumDuration.assert_called_once_with(400)
         
-        # Emit finished signal
-        mock_runner.finished.emit("Test response")
+        # Simulate completion
+        mock_worker.finished.emit("Test response")
         qtbot.wait(100)
+        
+        # Verify dialog is closed
+        progress.close.assert_called_once()
 
 def test_show_status(playground_widget, qtbot):
     """Test status message display."""

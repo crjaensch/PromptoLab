@@ -72,11 +72,14 @@ class MainWindow(QMainWindow):
         
         # Settings menu
         settings_menu = menubar.addMenu("Settings")
-        settings_menu.addAction("Configure...", self.show_settings)
+        settings_menu.addAction("Configure...", self.show_settings_dialog)
         
     @Slot()
-    def show_settings(self):
+    def show_settings_dialog(self):
         dialog = SettingsDialog(self)
+        # Connect the api_changed signal to both widgets
+        dialog.api_changed.connect(self.llm_playground.update_models)
+        dialog.api_changed.connect(self.evaluation_widget.update_models)
         dialog.exec()
 
     def closeEvent(self, event):

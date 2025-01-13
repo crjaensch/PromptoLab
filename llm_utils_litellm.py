@@ -31,8 +31,13 @@ SUPPORTED_MODELS = [
     "o1-preview",
     "groq/llama-3.1-8b-instant",
     "groq/llama-3.1-70b-versatile",
-    "gemini/gemini-1.5-pro-latest",
-    "gemini/gemini-2.0-flash",
+    "gemini/gemini-2.0-flash-exp",
+    "gemini/gemini-1.5-pro",
+    "ollama/llama3.2",
+    "ollama/llama3.1:8b",
+    "ollama/phi4",
+    "ollama/olmo2:7b",
+    "ollama/falcon3:10b",
     # ... add or remove models as needed
 ]
 

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                               QTableWidget, QTableWidgetItem, QMessageBox,
                               QGroupBox, QSplitter, QTabWidget,
                               QHeaderView, QFileDialog)
-from PySide6.QtCore import Qt, Signal, QSettings, QThread, Qt, QMetaObject, Q_ARG
+from PySide6.QtCore import Qt, Signal, Slot, QSettings, QThread, Qt, QMetaObject, Q_ARG
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
@@ -48,6 +48,19 @@ class EvaluationWidget(QWidget):
         self.table_updated.connect(self._update_table, Qt.ConnectionType.QueuedConnection)
         
         self.setup_ui()
+        
+        # Update models for current API
+        self.update_models()
+        
+    @Slot()
+    def update_models(self):
+        """Update the model combobox based on the current API."""
+        self.model_combo.clear()
+        try:
+            models = LLMWorker.get_models()
+            self.model_combo.addItems(models)
+        except Exception as e:
+            self.status_changed.emit(f"Error loading models: {str(e)}", 5000)
         
     def cleanup_threads(self):
         """Clean up any running worker threads."""
@@ -522,6 +535,15 @@ class EvaluationWidget(QWidget):
         index = self.test_set_combo.findText(test_set.name)
         if index >= 0:
             self.test_set_combo.setCurrentIndex(index)
+
+    def update_models_for_api(self, api_name):
+        """Update the model combobox based on the selected API."""
+        self.model_combo.clear()
+        try:
+            models = LLMWorker.get_models()
+            self.model_combo.addItems(models)
+        except Exception as e:
+            self.status_changed.emit(f"Error loading models: {str(e)}", 5000)
 
     def resizeEvent(self, event):
         """Handle widget resize to maintain column proportions."""

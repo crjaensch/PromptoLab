@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, 
                                QLabel, QComboBox, QPushButton)
+from PySide6.QtCore import Signal, Slot
 from pathlib import Path
 import sys
 
@@ -11,6 +12,8 @@ if project_root not in sys.path:
 from config import config
 
 class SettingsDialog(QDialog):
+    api_changed = Signal(str)  # Signal to emit when API changes
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("PromptoLab Settings")
@@ -23,11 +26,12 @@ class SettingsDialog(QDialog):
         api_layout = QHBoxLayout()
         api_label = QLabel("LLM API:")
         self.api_combo = QComboBox()
-        self.api_combo.addItems(["llm-cmd", "litellm"])
+        self.api_combo.addItem("llm cmdline tool", "llm-cmd")
+        self.api_combo.addItem("LiteLLM library", "litellm")
         
         # Set current value from config
         current_api = config.llm_api
-        index = self.api_combo.findText(current_api)
+        index = self.api_combo.findData(current_api)
         if index >= 0:
             self.api_combo.setCurrentIndex(index)
             
@@ -38,7 +42,7 @@ class SettingsDialog(QDialog):
         button_layout = QHBoxLayout()
         save_button = QPushButton("Save")
         cancel_button = QPushButton("Cancel")
-        reset_button = QPushButton("Reset to Default")
+        reset_button = QPushButton("Reset")
         
         save_button.clicked.connect(self.save_settings)
         cancel_button.clicked.connect(self.reject)
@@ -55,11 +59,14 @@ class SettingsDialog(QDialog):
         self.setLayout(layout)
         
     def save_settings(self):
-        config.llm_api = self.api_combo.currentText()
+        new_api = self.api_combo.currentData()
+        if new_api != config.llm_api:  # Only update and emit if value has changed
+            config.llm_api = new_api
+            self.api_changed.emit(new_api)
         self.accept()
         
     def reset_settings(self):
         config.reset_llm_api()
-        index = self.api_combo.findText(config.llm_api)
+        index = self.api_combo.findData(config.llm_api)
         if index >= 0:
             self.api_combo.setCurrentIndex(index)

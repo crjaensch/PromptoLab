@@ -38,6 +38,9 @@ class LLMPlaygroundWidget(QWidget):
         self.worker_thread = None
         self.worker = None
         self.progress_dialog = None
+        
+        # Update models for current API
+        self.update_models()
 
     def show_status(self, message, timeout=5000):
         """Show a status message in the main window's status bar."""
@@ -683,3 +686,13 @@ class LLMPlaygroundWidget(QWidget):
     def adjust_row_heights(self, item):
         """Adjust row heights based on content."""
         self.variables_table.resizeRowToContents(item.row())
+
+    @Slot()
+    def update_models(self):
+        """Update the model combobox based on the current API."""
+        self.model_combo.clear()
+        try:
+            models = LLMWorker.get_models()
+            self.model_combo.addItems(models)
+        except Exception as e:
+            self.show_status(f"Error loading models: {str(e)}", 5000)

@@ -130,7 +130,8 @@ class EmbedWorker(QObject):
     
     def __init__(self, text: str):
         super().__init__()
-        self.embed_model = "3-large"
+        self.llm_cmd_embed_model = "3-large"
+        self.litellm_embed_model = "text-embedding-3-large"
         self.text = text
         
         self._loop = None
@@ -146,11 +147,11 @@ class EmbedWorker(QObject):
             # Schedule the embed model request as a Task so we can cancel it later
             if config.llm_api == 'llm-cmd':
                self._task = self._loop.create_task(
-                   llm_utils_llmcmd.run_embed_async(self.embed_model, self.text)
+                   llm_utils_llmcmd.run_embed_async(self.llm_cmd_embed_model, self.text)
                )
             else:
                 self._task = self._loop.create_task(
-                   llm_utils_litellm.run_embed_async(self.embed_model, self.text)
+                   llm_utils_litellm.run_embed_async(self.litellm_embed_model, self.text)
                )            
 
             # Run the event loop until the task completes (or is cancelled)

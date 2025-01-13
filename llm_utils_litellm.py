@@ -86,7 +86,6 @@ async def run_llm_async(
         logger.error("Unexpected response format from LiteLLM: %s", result)
         raise ValueError("Unexpected response format from LiteLLM")
 
-    logger.info("Received response from LiteLLM")
     return response
 
 
@@ -100,13 +99,19 @@ async def run_embed_async(embed_model: str, text: str) -> List[float]:
     """
     # Log the request details
     logger.info("Running LiteLLM embedding with model: %s", embed_model)
-    logger.info("Text to embed: %s", text)
+    logger.info("Text to embed: %s", (text[:70] + "...") if text else "None")
 
     loop = asyncio.get_running_loop()
-    embed_func = partial(litellm.embeddings, model=embed_model, text=text)
-    embedding: List[float] = await loop.run_in_executor(None, embed_func)
+    embed_func = partial(litellm.embedding, model=embed_model, input=text)
+    result = await loop.run_in_executor(None, embed_func)
 
-    return embedding
+    # Parse the embedding result (assuming it's an OpenAI EmbeddingResponse object)
+    try:
+        embedding_vector = result['data'][0]['embedding']
+        logger.info(f"Embedding result: {embedding_vector[:3]} ... {embedding_vector[-3:]}")
+        return embedding_vector
+    except AttributeError as e:
+        raise ValueError(f"Unexpected embedding response format from LiteLLM: {e}")
 
 
 def get_models() -> List[str]:

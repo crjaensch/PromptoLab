@@ -17,10 +17,16 @@ With PromptoLab, navigating the complexities of prompt design has never been mor
 ## Prerequisites
 
 - Python 3.10 or higher
-- [llm](https://github.com/simonw/llm) command-line tool
-  ```bash
-  pip install llm
-  ```
+- One of the following LLM backends:
+  - [llm](https://github.com/simonw/llm) command-line tool
+    ```bash
+    pip install llm
+    ```
+  - [LiteLLM](https://github.com/BerriAI/litellm) library
+    ```bash
+    pip install litellm (NOTE: not needed because it is already defined inside requirements.txt)
+    ```
+- QSettings configuration for storing LLM backend preferences
 
 ## Installation
 
@@ -40,6 +46,23 @@ With PromptoLab, navigating the complexities of prompt design has never been mor
    ```bash
    python3 -m pip install -r requirements.txt
    ```
+
+## Configuration
+
+PromptoLab uses Qt's native configuration system (QSettings) to persist your LLM backend preferences. The settings are automatically saved and restored between application launches, with storage locations optimized for each platform:
+- Windows: Registry
+- macOS: .plist files
+- Linux: INI-style files
+
+You can configure your preferred LLM backend and API settings through the application's interface. The following options are available:
+
+- **LLM Backend**: Choose between the `llm` command-line tool or LiteLLM library
+- **API Configuration**: Provide API keys for your preferred LLM models when using LiteLLM, such as:
+  - OpenAI API Key
+  - Groq API Key
+  - Google Gemini API Key
+
+- Note that __locally installed__ LLMs, e.g. via [Ollama](https://ollama.com), are supported for LiteLLM.
 
 ## Running the Application
 
@@ -85,6 +108,7 @@ Here's a quick visual overview of PromptoLab's main features:
 The project uses:
 - PySide6 for the GUI to enable cross-platform use
 - Simon Willison's `llm` tool for LLM interactions
+- BerriAI's `litellm` library
 - Python's built-in `venv` for environment management
 
 ## License

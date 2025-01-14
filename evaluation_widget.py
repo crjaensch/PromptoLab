@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                               QTableWidget, QTableWidgetItem, QMessageBox,
                               QGroupBox, QSplitter, QTabWidget,
                               QHeaderView, QFileDialog)
-from PySide6.QtCore import Qt, Signal, QSettings
+from PySide6.QtCore import Qt, Signal, Slot, QSettings, QThread, Qt, QMetaObject, Q_ARG
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
@@ -19,11 +19,17 @@ from models import TestSet
 from test_storage import TestSetStorage
 from output_analyzer import (OutputAnalyzer, AnalysisResult, AnalysisError,
                            LLMError, SimilarityError)
-from llm_utils import run_llm_async, get_llm_models
+from llm_utils_adapter import LLMWorker
 from expandable_text import ExpandableTextWidget
 from html_eval_report import HtmlEvalReport
 
 class EvaluationWidget(QWidget):
+    test_set_updated = Signal(TestSet)  # Signal emitted when test set is updated
+    status_changed = Signal(str, int)  # Signal for status bar updates (message, timeout)
+    error_occurred = Signal(str, str)  # New signal for error handling
+    progress_updated = Signal(int)     # New signal for progress updates
+    table_updated = Signal(int, object)  # New signal for table updates
+    
     def __init__(self, test_set_storage: TestSetStorage, settings: QSettings, parent=None):
         super().__init__(parent)
         self.settings = settings
@@ -34,7 +40,46 @@ class EvaluationWidget(QWidget):
         self.current_analyzer = None
         self.pending_cases = []
         self.evaluation_results = []  # Store accumulated results
+        self.active_threads = []      # Keep track of active threads
+        
+        # Connect signals using queued connection for thread safety
+        self.error_occurred.connect(self._show_error_dialog, Qt.ConnectionType.QueuedConnection)
+        self.progress_updated.connect(self._update_progress, Qt.ConnectionType.QueuedConnection)
+        self.table_updated.connect(self._update_table, Qt.ConnectionType.QueuedConnection)
+        
         self.setup_ui()
+        
+        # Update models for current API
+        self.update_models()
+        
+    @Slot()
+    def update_models(self):
+        """Update the model combobox based on the current API."""
+        self.model_combo.clear()
+        try:
+            models = LLMWorker.get_models()
+            self.model_combo.addItems(models)
+        except Exception as e:
+            self.status_changed.emit(f"Error loading models: {str(e)}", 5000)
+        
+    def cleanup_threads(self):
+        """Clean up any running worker threads."""
+        # First cleanup the analyzer if it exists
+        if self.current_analyzer:
+            self.current_analyzer.cleanup()
+            self.current_analyzer = None
+            
+        # Then safely cleanup threads
+        for thread in self.active_threads[:]:  # Create a copy of the list to avoid modification during iteration
+            if thread.isRunning():
+                thread.quit()
+                thread.wait(1000)  # Wait up to 1 second
+        self.active_threads.clear()
+
+    def closeEvent(self, event):
+        """Handle widget close event."""
+        self.cleanup_threads()
+        super().closeEvent(event)
         
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -69,12 +114,12 @@ class EvaluationWidget(QWidget):
         selector_layout.addWidget(model_label)
         self.model_combo = QComboBox()
         # Get available models dynamically
-        available_models = get_llm_models()
+        available_models = LLMWorker.get_models()
         if available_models:
             self.model_combo.addItems(available_models)
         else:
             # Fallback to default model if we can't get the list
-            self.model_combo.addItems(["gpt-4o-mini"])
+            self.model_combo.addItem("No models available")
         selector_layout.addWidget(self.model_combo)
         
         upper_layout.addLayout(selector_layout)
@@ -293,8 +338,8 @@ class EvaluationWidget(QWidget):
             
             # Show progress bar and disable buttons
             self.progress_bar.show()
-            self.progress_bar.setValue(0)
             self.progress_bar.setMaximum(len(self.current_test_set.cases))
+            self.progress_bar.setValue(0)
             self.run_button.setEnabled(False)
             self.export_button.setEnabled(False)
             
@@ -307,78 +352,93 @@ class EvaluationWidget(QWidget):
             
     def _process_next_case(self, model):
         """Process the next test case in the queue."""
-        if not self.pending_cases:
-            self._finish_evaluation()
-            return
-            
         i, test_case = self.pending_cases.pop(0)
         
-        # Start LLM generation
-        self.current_llm_runner = run_llm_async(
-            test_case.input_text,
-            self.system_prompt_input.toPlainText(),
-            model
+        # Create worker in new thread
+        worker_thread = QThread()
+        worker = LLMWorker(
+            model_name=model,
+            user_prompt=test_case.input_text,
+            system_prompt=self.system_prompt_input.toPlainText().strip() or None
         )
+        worker.moveToThread(worker_thread)
         
-        def handle_llm_result(current_output):
+        # Keep track of thread for cleanup
+        self.active_threads.append(worker_thread)
+        
+        # Connect signals
+        worker.finished.connect(lambda result: self.handle_llm_result(result))
+        worker.error.connect(lambda msg: self._handle_error("LLM Error", msg))
+        worker_thread.started.connect(worker.run)
+        worker_thread.finished.connect(worker_thread.deleteLater)
+        
+        # Store current state
+        self.current_llm_runner = worker
+        self.current_row = i
+        self.current_test_case = test_case
+        
+        # Start thread
+        worker_thread.start()
+        
+    def handle_llm_result(self, current_output):
+        """Handle LLM result and start analysis."""
+        try:
+            # Create analyzer for current test case
+            self.current_analyzer = self.output_analyzer.create_async_analyzer()
+            self.current_analyzer.finished.connect(
+                lambda result: self._handle_analysis_result(self.current_row, result)
+            )
+            self.current_analyzer.error.connect(
+                lambda msg: self._handle_error("Analysis Error", msg)
+            )
+            
             # Start analysis
-            analyzer = self.output_analyzer.create_async_analyzer()
-            analyzer.finished.connect(
-                lambda result: self._handle_analysis_result(i, result)
-            )
-            analyzer.error.connect(
-                lambda error: self._handle_error("Analysis Error", error)
-            )
-            
-            # Store reference to prevent garbage collection
-            self.current_analyzer = analyzer
-            
-            # Start the analysis
-            analyzer.start_analysis(
-                input_text=test_case.input_text,
-                baseline=test_case.baseline_output,
+            self.current_analyzer.start_analysis(
+                input_text=self.current_test_case.input_text,
+                baseline=self.current_test_case.baseline_output,
                 current=current_output,
-                model=model
+                model=self.model_combo.currentText()
             )
             
-        def handle_llm_error(error):
-            self._handle_error("LLM Error", error)
+        except Exception as e:
+            self._handle_error("Error processing LLM result", str(e))
             
-        self.current_llm_runner.finished.connect(handle_llm_result)
-        self.current_llm_runner.error.connect(handle_llm_error)
-        
     def _handle_analysis_result(self, row, result):
         """Handle completion of analysis for a test case."""
         try:
-            # Add row to results table
-            self.results_table.insertRow(row)
+            # Store result
+            self.evaluation_results.append(result)
             
-            # Add items to the row
-            self.results_table.setItem(row, 0, QTableWidgetItem(result.input_text))
-            self.results_table.setItem(row, 1, QTableWidgetItem(result.baseline_output))
-            self.results_table.setItem(row, 2, QTableWidgetItem(result.current_output))
-            self.results_table.setItem(row, 3, QTableWidgetItem(f"{result.similarity_score:.2f}"))
-            self.results_table.setItem(row, 4, QTableWidgetItem(result.llm_grade))
+            # Emit signals for UI updates
+            self.progress_updated.emit(len(self.evaluation_results))
+            self.table_updated.emit(row, result)
             
-            # Store result in accumulator
-            self.evaluation_results.append({
-                "input_text": result.input_text,
-                "baseline_output": result.baseline_output,
-                "current_output": result.current_output,
-                "similarity_score": result.similarity_score,
-                "llm_grade": result.llm_grade
-            })
-            
-            # Update progress
-            self.progress_bar.setValue(row + 1)
-            
-            # Process next case if any
-            model = self.model_combo.currentText()
-            self._process_next_case(model)
+            # Process next case or finish
+            if self.pending_cases:
+                self._process_next_case(self.model_combo.currentText())
+            else:
+                self._finish_evaluation()
             
         except Exception as e:
             self._handle_error("Error handling analysis result", str(e))
             
+    def _update_progress(self, value):
+        """Update progress bar from main thread"""
+        self.progress_bar.setValue(value)
+        
+    def _update_table(self, row, result):
+        """Update table from main thread"""
+        self.results_table.setRowCount(len(self.evaluation_results))
+        self._update_table_row(row, result)
+        
+    def _update_table_row(self, row, result):
+        """Update a row in the results table."""
+        self.results_table.setItem(row, 0, QTableWidgetItem(result.input_text))
+        self.results_table.setItem(row, 1, QTableWidgetItem(result.baseline_output))
+        self.results_table.setItem(row, 2, QTableWidgetItem(result.current_output))
+        self.results_table.setItem(row, 3, QTableWidgetItem(f"{result.similarity_score:.2f}"))
+        self.results_table.setItem(row, 4, QTableWidgetItem(result.llm_grade))
+        
     def _finish_evaluation(self):
         """Clean up after evaluation is complete."""
         # Select the first row to show initial analysis
@@ -394,20 +454,29 @@ class EvaluationWidget(QWidget):
         self.show_status("Evaluation run completed!", 5000)
         
     def _handle_error(self, title, message):
-        """Handle errors during evaluation."""
+        """Handle errors during evaluation by emitting signal."""
+        self.error_occurred.emit(title, message)
+    
+    def _show_error_dialog(self, title, message):
+        """Show error dialog on the main thread."""
         self.progress_bar.hide()
         self.run_button.setEnabled(True)
-        self.export_button.setEnabled(len(self.evaluation_results) > 0)  # Only enable if we have results
+        self.export_button.setEnabled(len(self.evaluation_results) > 0)
         QMessageBox.critical(self, title, 
-                           f"{title}: {message}\n\n"
-                           "Please check your inputs and try again.")
+                          f"{title}: {message}\n\n"
+                          "Please check your inputs and try again.")
         
     def show_status(self, message, timeout=5000):
         """Show a status message in the main window's status bar."""
         main_window = self.window()
         if main_window is not self and main_window and hasattr(main_window, 'show_status'):
-            main_window.show_status(message, timeout)
-
+            # Use invokeMethod to ensure thread-safe status update
+            QMetaObject.invokeMethod(main_window, 
+                                   "show_status",
+                                   Qt.ConnectionType.QueuedConnection,
+                                   Q_ARG(str, message),
+                                   Q_ARG(int, timeout))
+        
     def toggle_analysis(self):
         if self.analysis_tabs.isVisible():
             # Store current sizes before hiding
@@ -465,6 +534,15 @@ class EvaluationWidget(QWidget):
         index = self.test_set_combo.findText(test_set.name)
         if index >= 0:
             self.test_set_combo.setCurrentIndex(index)
+
+    def update_models_for_api(self, api_name):
+        """Update the model combobox based on the selected API."""
+        self.model_combo.clear()
+        try:
+            models = LLMWorker.get_models()
+            self.model_combo.addItems(models)
+        except Exception as e:
+            self.status_changed.emit(f"Error loading models: {str(e)}", 5000)
 
     def resizeEvent(self, event):
         """Handle widget resize to maintain column proportions."""

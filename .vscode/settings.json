@@ -8,6 +8,8 @@
         "qapp",
         "qtbot",
         "QWIDGETSIZE",
-        "promptolab"
+        "promptolab",
+        "litellm",
+        "llmcmd",
     ]
 }

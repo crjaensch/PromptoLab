@@ -5,20 +5,19 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTextEdit, QComboBox, QLabel, QSplitter,
                               QCheckBox, QProgressDialog, QTableWidget,
                               QTableWidgetItem, QHeaderView, QFrame, QSizePolicy)
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, QThread, Signal
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from collapsible_panel import CollapsiblePanel
 from expandable_text import ExpandableTextWidget
-from llm_utils import run_llm_async, get_llm_models
+from llm_utils_adapter import LLMWorker
 from special_prompts import (get_TAG_pattern_improvement_prompt,
                              get_PIC_pattern_improvement_prompt,
                              get_LIFE_pattern_improvement_prompt)
-from collapsible_panel import CollapsiblePanel
-
 class LLMPlaygroundWidget(QWidget):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -34,7 +33,14 @@ class LLMPlaygroundWidget(QWidget):
         self.current_variables = {}  # Store current prompt variables
         self.setup_ui()
         self.load_state()
-        self.current_runner = None  # Keep track of current LLM process
+        
+        # Initialize worker-related variables
+        self.worker_thread = None
+        self.worker = None
+        self.progress_dialog = None
+        
+        # Update models for current API
+        self.update_models()
 
     def show_status(self, message, timeout=5000):
         """Show a status message in the main window's status bar."""
@@ -191,7 +197,7 @@ class LLMPlaygroundWidget(QWidget):
         model_label = QLabel("Model:")
         self.model_combo = QComboBox()
         # Get available models dynamically
-        available_models = get_llm_models()
+        available_models = LLMWorker.get_models()
         if available_models:
             self.model_combo.addItems(available_models)
         else:
@@ -335,54 +341,101 @@ class LLMPlaygroundWidget(QWidget):
             processed_system_prompt = self.get_processed_prompt(system_prompt_text) if system_prompt_text else None
                 
             # Convert parameters to the correct type only if they're provided
-            max_tokens = int(self.max_tokens_combo.currentText()) if self.max_tokens_combo.currentText() else None
-            temperature = float(self.temperature_combo.currentText()) if self.temperature_combo.currentText() else None
-            top_p = float(self.top_p_combo.currentText()) if self.top_p_combo.currentText() else None
+            model_params = {}
+            if self.max_tokens_combo.currentText():
+                model_params['max_tokens'] = int(self.max_tokens_combo.currentText())
+            if self.temperature_combo.currentText():
+                model_params['temperature'] = float(self.temperature_combo.currentText())
+            if self.top_p_combo.currentText():
+                model_params['top_p'] = float(self.top_p_combo.currentText())
             
             # Show progress dialog and status
-            progress = QProgressDialog("Running LLM...", "Cancel", 0, 0, self)
-            progress.setWindowModality(Qt.WindowModal)
-            progress.setMinimumDuration(400)  # Show after 400ms to avoid flashing for quick responses
+            self.progress_dialog = QProgressDialog("Running LLM...", "Cancel", 0, 0, self)
+            self.progress_dialog.setWindowModality(Qt.WindowModal)
+            self.progress_dialog.setMinimumDuration(400)  # Show after 400ms to avoid flashing for quick responses
             self.show_status("Running LLM request...", 0)  # Show until completion
             
-            # Start async LLM process
-            self.current_runner = run_llm_async(
-                processed_user_prompt, 
-                processed_system_prompt, 
-                model,
-                temperature=temperature, 
-                max_tokens=max_tokens, 
-                top_p=top_p
+            # Create worker thread and worker
+            self.worker_thread = QThread()
+            self.worker = LLMWorker(
+                model_name=model,
+                user_prompt=processed_user_prompt,
+                system_prompt=processed_system_prompt,
+                model_params=model_params
             )
+            self.worker.moveToThread(self.worker_thread)
             
-            def handle_result(result):
-                progress.close()
-                self.playground_output.setMarkdown(result)
-                self.save_as_prompt_button.setEnabled(False)  # Ensure button is disabled for regular submit
-                self.show_status("LLM request completed successfully!", 5000)
-                
-            def handle_error(error):
-                progress.close()
-                self.playground_output.setPlainText(f"Error: {error}")
-                self.save_as_prompt_button.setEnabled(False)  # Disable button on error
-                self.show_status(f"Error: {error}", 7000)
-                
             # Connect signals
-            self.current_runner.finished.connect(handle_result)
-            self.current_runner.error.connect(handle_error)
+            self.worker_thread.started.connect(self.worker.run)
+            self.worker.finished.connect(self.on_llm_finished)
+            self.worker.error.connect(self.on_llm_error)
+            self.worker.cancelled.connect(self.on_llm_cancelled)
             
             # Handle cancellation
-            def handle_cancel():
-                if self.current_runner:
-                    self.current_runner.process.kill()
-                    self.show_status("LLM request cancelled", 5000)
-                    
-            progress.canceled.connect(handle_cancel)
+            self.progress_dialog.canceled.connect(self.on_cancel_clicked)
+            
+            # Start the thread
+            self.worker_thread.start()
             
         except Exception as e:
             self.playground_output.setPlainText(f"Error: {str(e)}")
             self.save_as_prompt_button.setEnabled(False)  # Disable button on error
             self.show_status(f"Error: {str(e)}", 7000)
+
+    @Slot(str)
+    def on_llm_finished(self, result: str):
+        """Called when the LLM request finishes without cancellation."""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        self.playground_output.setMarkdown(result)
+        self.save_as_prompt_button.setEnabled(False)
+        self.show_status("LLM request completed successfully!", 5000)
+        self.cleanup()
+
+    @Slot(str)
+    def on_llm_error(self, error_msg: str):
+        """Called if an exception occurs in the LLM Worker."""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        self.playground_output.setPlainText(f"Error: {error_msg}")
+        self.save_as_prompt_button.setEnabled(False)
+        self.show_status(f"Error: {error_msg}", 7000)
+        self.cleanup()
+
+    @Slot()
+    def on_llm_cancelled(self):
+        """Called if the LLM task was cancelled via user's request."""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        self.playground_output.setPlainText("LLM request was cancelled by the user.")
+        self.show_status("LLM request cancelled", 5000)
+        self.cleanup()
+
+    def on_cancel_clicked(self):
+        """User clicked 'Cancel' in the progress dialog."""
+        self.playground_output.setPlainText("User requested cancellation...")
+        if self.worker:
+            self.worker.cancel()
+
+    def cleanup(self):
+        """Cleanup the thread and close the progress dialog."""
+        if self.progress_dialog:
+            self.progress_dialog.reset()
+            self.progress_dialog = None
+
+        if self.worker_thread:
+            self.worker_thread.quit()
+            self.worker_thread.wait()
+            self.worker_thread = None
+            self.worker = None
+
+    def cleanup_worker(self):
+        """Clean up worker thread and worker."""
+        if hasattr(self, 'worker_thread') and self.worker_thread is not None:
+            self.worker_thread.quit()
+            self.worker_thread.wait()
+            self.worker_thread = None
+            self.worker = None
 
     @Slot()
     def improve_prompt(self):
@@ -408,42 +461,65 @@ class LLMPlaygroundWidget(QWidget):
                     overall_prompt = f"<original_prompt>\nSystem: {system_prompt}\n\nUser: {user_prompt}\n</original_prompt>"
             
             # Show progress dialog and status
-            progress = QProgressDialog("Improving prompt...", "Cancel", 0, 0, self)
-            progress.setWindowModality(Qt.WindowModal)
-            progress.setMinimumDuration(400)  # Show after 400ms to avoid flashing for quick responses
+            self.progress_dialog = QProgressDialog("Improving prompt...", "Cancel", 0, 0, self)
+            self.progress_dialog.setWindowModality(Qt.WindowModal)
+            self.progress_dialog.setMinimumDuration(400)  # Show after 400ms to avoid flashing for quick responses
             self.show_status(f"Working on improving your prompt using {pattern} pattern...", 0)  # Show until completion
             
-            # Start async LLM process
-            self.current_runner = run_llm_async(overall_prompt, pattern_prompt, model)
+            # Create worker thread and worker
+            self.worker_thread = QThread()
+            self.worker = LLMWorker(
+                model_name=model,
+                user_prompt=overall_prompt,
+                system_prompt=pattern_prompt
+            )
+            self.worker.moveToThread(self.worker_thread)
             
-            def handle_result(result):
-                progress.close()
-                self.playground_output.setMarkdown(result)
-                self.save_as_prompt_button.setEnabled(True)  # Only enable button for improve prompt results
-                self.show_status("Prompt improvement completed!", 5000)
-                
-            def handle_error(error):
-                progress.close()
-                self.playground_output.setPlainText(f"Error improving prompt: {error}")
-                self.save_as_prompt_button.setEnabled(False)  # Disable button on error
-                self.show_status(f"Error improving prompt: {error}", 7000)
-                
             # Connect signals
-            self.current_runner.finished.connect(handle_result)
-            self.current_runner.error.connect(handle_error)
+            self.worker_thread.started.connect(self.worker.run)
+            self.worker.finished.connect(self.on_improve_finished)
+            self.worker.error.connect(self.on_improve_error)
+            self.worker.cancelled.connect(self.on_improve_cancelled)
             
             # Handle cancellation
-            def handle_cancel():
-                if self.current_runner:
-                    self.current_runner.process.kill()
-                    self.show_status("Prompt improvement cancelled", 5000)
-                    
-            progress.canceled.connect(handle_cancel)
+            self.progress_dialog.canceled.connect(self.on_cancel_clicked)
+            
+            # Start the thread
+            self.worker_thread.start()
             
         except Exception as e:
             self.playground_output.setPlainText(f"Error improving prompt: {str(e)}")
             self.save_as_prompt_button.setEnabled(False)  # Disable button on error
             self.show_status(f"Error improving prompt: {str(e)}", 7000)
+
+    @Slot(str)
+    def on_improve_finished(self, result: str):
+        """Called when the prompt improvement finishes without cancellation."""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        self.playground_output.setMarkdown(result)
+        self.save_as_prompt_button.setEnabled(True)
+        self.show_status("Prompt improvement completed!", 5000)
+        self.cleanup()
+
+    @Slot(str)
+    def on_improve_error(self, error_msg: str):
+        """Called if an exception occurs in the LLM Worker during improvement."""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        self.playground_output.setPlainText(f"Error improving prompt: {error_msg}")
+        self.save_as_prompt_button.setEnabled(False)
+        self.show_status(f"Error improving prompt: {error_msg}", 7000)
+        self.cleanup()
+
+    @Slot()
+    def on_improve_cancelled(self):
+        """Called if the prompt improvement task was cancelled via user's request."""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        self.playground_output.setPlainText("Prompt improvement was cancelled by the user.")
+        self.show_status("Prompt improvement cancelled", 5000)
+        self.cleanup()
 
     @Slot()
     def toggle_system_prompt(self):
@@ -610,3 +686,13 @@ class LLMPlaygroundWidget(QWidget):
     def adjust_row_heights(self, item):
         """Adjust row heights based on content."""
         self.variables_table.resizeRowToContents(item.row())
+
+    @Slot()
+    def update_models(self):
+        """Update the model combobox based on the current API."""
+        self.model_combo.clear()
+        try:
+            models = LLMWorker.get_models()
+            self.model_combo.addItems(models)
+        except Exception as e:
+            self.show_status(f"Error loading models: {str(e)}", 5000)

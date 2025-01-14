@@ -1,7 +1,8 @@
 import sys
 from pathlib import Path
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QVBoxLayout
-from PySide6.QtCore import QSettings
+from PySide6.QtWidgets import (QMainWindow, QTabWidget, QWidget, QVBoxLayout,
+                              QMenuBar, QMenu)
+from PySide6.QtCore import QSettings, Slot
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
@@ -14,6 +15,7 @@ from test_set_manager import TestSetManagerWidget
 from evaluation_widget import EvaluationWidget
 from storage import FileStorage
 from test_storage import TestSetStorage
+from settings_dialog import SettingsDialog
 
 class MainWindow(QMainWindow):
     def __init__(self, prompt_storage: FileStorage, test_set_storage: TestSetStorage):
@@ -54,10 +56,32 @@ class MainWindow(QMainWindow):
         # Connect signals
         self.test_set_manager.test_set_updated.connect(self.evaluation_widget.update_test_set)
         self.prompts_catalog.prompt_selected_for_eval.connect(self.on_prompt_selected_for_eval)
+        self.evaluation_widget.status_changed.connect(self.show_status)
         
         # Load initial data after signals are connected
         self.prompts_catalog.load_prompts()
         
+        self.setup_menu()
+        
+    def setup_menu(self):
+        menubar = self.menuBar()
+        
+        # File menu
+        file_menu = menubar.addMenu("File")
+        file_menu.addAction("Exit", self.close)
+        
+        # Settings menu
+        settings_menu = menubar.addMenu("Settings")
+        settings_menu.addAction("Configure...", self.show_settings_dialog)
+        
+    @Slot()
+    def show_settings_dialog(self):
+        dialog = SettingsDialog(self)
+        # Connect the api_changed signal to both widgets
+        dialog.api_changed.connect(self.llm_playground.update_models)
+        dialog.api_changed.connect(self.evaluation_widget.update_models)
+        dialog.exec()
+
     def closeEvent(self, event):
         """Save settings when closing the window."""
         self.settings.sync()

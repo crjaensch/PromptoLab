@@ -1,7 +1,15 @@
 """Module for generating HTML evaluation reports with markdown support."""
 
 import markdown
-from typing import List, Dict
+from typing import List
+
+class AnalysisResult:
+    def __init__(self, input_text, baseline_output, current_output, similarity_score, llm_grade):
+        self.input_text = input_text
+        self.baseline_output = baseline_output
+        self.current_output = current_output
+        self.similarity_score = similarity_score
+        self.llm_grade = llm_grade
 
 class HtmlEvalReport:
     """Class for generating HTML evaluation reports with markdown support."""
@@ -9,13 +17,11 @@ class HtmlEvalReport:
     def __init__(self):
         self.md = markdown.Markdown(extensions=['tables', 'fenced_code'])
         
-    def generate_report(self, evaluation_results: List[Dict], metadata: Dict[str, str]) -> str:
+    def generate_report(self, evaluation_results: List[AnalysisResult], metadata: dict) -> str:
         """Generate an HTML report from evaluation results.
         
         Args:
-            evaluation_results: List of dictionaries containing evaluation results
-                              Each dict should have: input_text, baseline_output,
-                              current_output, similarity_score, and llm_grade
+            evaluation_results: List of AnalysisResult objects containing evaluation results
             metadata: Dictionary containing evaluation metadata:
                      - test_set_name: Name of the test set used
                      - baseline_system_prompt: System prompt used for baseline results
@@ -81,7 +87,7 @@ class HtmlEvalReport:
             <h1>Evaluation Results</h1>
         """
     
-    def _generate_metadata_section(self, metadata: Dict[str, str]) -> str:
+    def _generate_metadata_section(self, metadata: dict) -> str:
         """Generate the HTML for the metadata section."""
         return f"""
             <div class="metadata">
@@ -110,17 +116,17 @@ class HtmlEvalReport:
                 </tr>
         """
     
-    def _generate_table_content(self, evaluation_results: List[Dict]) -> str:
+    def _generate_table_content(self, evaluation_results: List[AnalysisResult]) -> str:
         """Generate the HTML table content from evaluation results."""
         content = ""
         for result in evaluation_results:
             content += f"""
                 <tr>
-                    <td>{self.md.convert(result['input_text'])}</td>
-                    <td>{self.md.convert(result['baseline_output'])}</td>
-                    <td>{self.md.convert(result['current_output'])}</td>
-                    <td class="score">{result['similarity_score']:.2f}</td>
-                    <td>{result['llm_grade']}</td>
+                    <td>{self.md.convert(result.input_text)}</td>
+                    <td>{self.md.convert(result.baseline_output)}</td>
+                    <td>{self.md.convert(result.current_output)}</td>
+                    <td class="score">{result.similarity_score:.2f}</td>
+                    <td>{result.llm_grade}</td>
                 </tr>
             """
             # Reset the markdown converter for the next iteration

@@ -7,14 +7,14 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import nltk
 import json
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QThread
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from llm_utils import run_llm_async, run_embedding_async
+from llm_utils_adapter import LLMWorker, EmbedWorker
 from special_prompts import (get_grader_system_prompt,
                             get_grader_instructions)
 
@@ -56,6 +56,9 @@ class AsyncAnalyzer(QObject):
         self.grade = None
         self.feedback = None
         
+        # Initialize thread variables
+        self.worker_threads = []
+        
     def start_analysis(self, input_text: str, baseline: str, current: str, model: str = "gpt-4o"):
         """Start the async analysis process."""
         self.input_text = input_text
@@ -66,20 +69,44 @@ class AsyncAnalyzer(QObject):
         # Start getting embeddings
         self._get_embeddings_async()
         
+    def _create_embed_worker(self, text: str, on_finished) -> QThread:
+        """Create and setup a thread with an EmbedWorker.
+        
+        Args:
+            text: The text to embed
+            on_finished: Callback function to handle the embedding result
+            
+        Returns:
+            QThread ready to be started
+        """
+        thread = QThread()
+        worker = EmbedWorker(text=text)
+        worker.moveToThread(thread)
+        worker.finished.connect(on_finished)
+        worker.error.connect(self.error.emit)
+        thread.started.connect(worker.run)
+        
+        # Store references
+        worker.thread = thread
+        self.worker_threads.append(thread)
+        self.pending_embeddings.append(worker)
+        
+        return thread
+        
     def _get_embeddings_async(self):
         """Get embeddings for both texts asynchronously."""
         try:
             # Start baseline embedding
-            baseline_runner = run_embedding_async(self.baseline)
-            baseline_runner.finished.connect(lambda result: self._handle_baseline_embedding(result))
-            baseline_runner.error.connect(self.error.emit)
-            self.pending_embeddings.append(baseline_runner)
+            self._create_embed_worker(
+                self.baseline,
+                lambda result: self._handle_baseline_embedding(result)
+            ).start()
             
             # Start current embedding
-            current_runner = run_embedding_async(self.current)
-            current_runner.finished.connect(lambda result: self._handle_current_embedding(result))
-            current_runner.error.connect(self.error.emit)
-            self.pending_embeddings.append(current_runner)
+            self._create_embed_worker(
+                self.current,
+                lambda result: self._handle_current_embedding(result)
+            ).start()
             
         except Exception as e:
             self.error.emit(f"Error starting embeddings: {str(e)}")
@@ -111,22 +138,33 @@ class AsyncAnalyzer(QObject):
             
     def _get_llm_grade(self, similarity):
         """Get LLM grade asynchronously."""
-        system_prompt = get_grader_system_prompt()
-        evaluation_prompt = get_grader_instructions(
+        grader_system_prompt = get_grader_system_prompt()
+        grader_user_prompt = get_grader_instructions(
             self.input_text, 
             self.baseline, 
             self.current
         )
 
         try:
-            runner = run_llm_async(
-                user_prompt=evaluation_prompt,
-                system_prompt=system_prompt,
-                model=self.model
+            # Create worker thread
+            thread = QThread()
+            worker = LLMWorker(
+                model_name=self.model,
+                user_prompt=grader_user_prompt,
+                system_prompt=grader_system_prompt
             )
-            runner.finished.connect(lambda result: self._handle_grade_result(result, similarity))
-            runner.error.connect(self.error.emit)
-            self.current_runner = runner
+            worker.moveToThread(thread)
+            worker.finished.connect(lambda result: self._handle_grade_result(result, similarity))
+            worker.error.connect(self.error.emit)
+            thread.started.connect(worker.run)
+            
+            # Store references
+            worker.thread = thread
+            self.worker_threads.append(thread)
+            self.current_runner = worker
+            
+            # Start thread
+            thread.start()
             
         except Exception as e:
             self.error.emit(f"Error getting LLM evaluation: {str(e)}")
@@ -134,9 +172,23 @@ class AsyncAnalyzer(QObject):
     def _handle_grade_result(self, result, similarity):
         """Handle completion of LLM grading."""
         try:
-            grade_line, *feedback_lines = result.split('\n')
-            grade = grade_line.replace('Grade:', '').strip()
-            feedback = '\n'.join(feedback_lines).strip()
+            # Try parsing as JSON first
+            try:
+                grade_dict = json.loads(result)
+                grade = grade_dict.get('grade', 'ERROR')
+                feedback = grade_dict.get('feedback', 'No feedback provided')
+            except json.JSONDecodeError:
+                # Fallback to text format parsing
+                lines = result.strip().split('\n')
+                if not lines:
+                    raise ValueError("Empty LLM response")
+                    
+                # First line should contain the grade
+                grade_line = lines[0]
+                grade = grade_line.replace('Grade:', '').strip()
+                
+                # Rest is feedback
+                feedback = '\n'.join(lines[1:]).strip()
             
             # Create final result
             analysis_result = AnalysisResult(
@@ -152,16 +204,33 @@ class AsyncAnalyzer(QObject):
                 ]
             )
             
-            # Store result in analyzer
-            self.output_analyzer.analysis_results.append(analysis_result)
-            
             # Emit result
             self.finished.emit(analysis_result)
             
         except Exception as e:
-            self.error.emit(f"Error processing grade result: {str(e)}")
+            self.error.emit(f"Error processing LLM grade result: {str(e)}")
+
+    def cleanup(self):
+        """Clean up any running workers."""
+        # Cancel any pending workers
+        for worker in self.pending_embeddings:
+            worker.cancel()
+        if self.current_runner:
+            self.current_runner.cancel()
+        
+        # Clean up threads safely
+        for thread in self.worker_threads:
+            try:
+                thread.quit()
+            except Exception:
+                pass  # Ignore cleanup errors
+        
+        self.worker_threads.clear()
+        self.pending_embeddings.clear()
+        self.current_runner = None
 
 class OutputAnalyzer:
+    """Class for analyzing and comparing outputs."""
     def __init__(self):
         # Ensure NLTK resources are available
         try:
@@ -171,129 +240,33 @@ class OutputAnalyzer:
             
         # Initialize history
         self.analysis_results: List[AnalysisResult] = []
-
+        
     def create_async_analyzer(self) -> AsyncAnalyzer:
         """Create an async analyzer instance."""
-        return AsyncAnalyzer(self)
-
-    async def _get_text_embedding(self, text: str) -> np.ndarray:
-        """Get embedding for the entire text."""
-        try:
-            runner = run_embedding_async(text, embed_model="3-large")
-            embedding_str = await runner.wait_for_output()
-            embedding = eval(embedding_str)  # Safe here since we know the format is a list of numbers
-            return np.array([embedding])  # Return as 2D array for cosine_similarity
-        except Exception as e:
-            raise SimilarityError(f"Error getting text embedding: {str(e)}")
-
-    async def _compute_semantic_similarity(self, baseline: str, current: str) -> float:
-        """Compute semantic similarity between baseline and current outputs."""
-        try:
-            baseline_embedding = await self._get_text_embedding(baseline)
-            current_embedding = await self._get_text_embedding(current)
-            
-            similarity = cosine_similarity(baseline_embedding, current_embedding)[0][0]
-            return similarity
-            
-        except Exception as e:
-            raise SimilarityError(f"Error computing semantic similarity: {str(e)}")
-
-    async def _get_llm_grade(self, user_prompt: str, baseline: str, current: str, model: str = "gpt-4o") -> tuple[str, str]:
-        """Get LLM-based grade and feedback comparing baseline and current outputs."""
-        system_prompt = get_grader_system_prompt()
-        evaluation_prompt = get_grader_instructions(user_prompt, baseline, current)
-
-        try:
-            runner = run_llm_async(
-                user_prompt=evaluation_prompt,
-                system_prompt=system_prompt,
-                model=model
-            )
-            result = await runner.wait_for_output()
-            
-            grade_line, *feedback_lines = result.split('\n')
-            grade = grade_line.replace('Grade:', '').strip()
-            feedback = '\n'.join(feedback_lines).strip()
-            
-            return grade, feedback
-            
-        except Exception as e:
-            raise LLMError(f"Error getting LLM grade: {str(e)}")
-
-    async def analyze_differences(self, baseline: str, current: str) -> dict:
-        """Analyze differences between baseline and current outputs."""
-        try:
-            similarity = await self._compute_semantic_similarity(baseline, current)
-            
-            return {
-                'similarity': {'Overall': similarity},
-                'changes': [
-                    "Detailed sentence-level comparison removed in favor of overall semantic similarity"
-                ]
-            }
-            
-        except Exception as e:
-            raise AnalysisError(f"Error analyzing differences: {str(e)}")
-
-    async def analyze_test_case(self, input_text: str, baseline: str, current: str, model: str = "gpt-4o") -> AnalysisResult:
-        """Analyze a single test case and store the result."""
-        try:
-            # Get semantic similarity
-            similarity = await self._compute_semantic_similarity(baseline, current)
-            
-            # Get LLM grade and feedback
-            grade, feedback = await self._get_llm_grade(input_text, baseline, current, model)
-            
-            # Create result object
-            result = AnalysisResult(
-                input_text=input_text,
-                baseline_output=baseline,
-                current_output=current,
-                similarity_score=similarity,
-                llm_grade=grade,
-                llm_feedback=feedback,
-                key_changes=[
-                    "Using overall semantic similarity for comparison",
-                    "Similarity score represents whole text comparison"
-                ]
-            )
-            
-            # Store result
-            self.analysis_results.append(result)
-            return result
-            
-        except Exception as e:
-            raise AnalysisError(f"Error analyzing test case: {str(e)}")
-
+        analyzer = AsyncAnalyzer(self)
+        analyzer.finished.connect(self.analysis_results.append)
+        return analyzer
+        
     def clear_history(self):
         """Clear the analysis history."""
         self.analysis_results = []
-
+        
     def get_analysis_text(self, index: int) -> str:
         """Get formatted analysis text for the given result index."""
         if not self.analysis_results or index >= len(self.analysis_results):
             return "No analysis available"
             
         result = self.analysis_results[index]
-        return """Semantic Similarity Analysis
-------------------------
-Overall Similarity Score: {:.2f}
-
-Key Changes:
-{}""".format(
-            result.similarity_score,
-            "".join("- {}{}".format(change, os.linesep) for change in result.key_changes)
+        return (
+            f"Semantic Similarity Analysis:\n"
+            f"• Overall Similarity Score: {result.similarity_score:.2f}\n\n"
+            "Note: Using overall semantic similarity for comparison"
         )
-
+        
     def get_feedback_text(self, index: int) -> str:
         """Get formatted feedback text for the given result index."""
         if not self.analysis_results or index >= len(self.analysis_results):
             return "No feedback available"
             
         result = self.analysis_results[index]
-        return """LLM Evaluation
--------------
-Grade: {}
-
-Detailed Feedback:
-{}""".format(result.llm_grade, result.llm_feedback)
+        return f"Grade: {result.llm_grade}\n---\n{result.llm_feedback}"

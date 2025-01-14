@@ -73,7 +73,7 @@ class EvaluationWidget(QWidget):
         for thread in self.active_threads[:]:  # Create a copy of the list to avoid modification during iteration
             if thread.isRunning():
                 thread.quit()
-                thread.wait(1000)  # Wait up to 1 second
+                thread.wait()
         self.active_threads.clear()
 
     def closeEvent(self, event):

@@ -49,13 +49,18 @@ async def run_llm_async(
     model_params: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
-    Asynchronously run a completion call on the specified LLM model.
+    Run a completion call on the specified LLM model asynchronously.
+
+    This function is the primary entry point for interacting with LiteLLM models.
+    It takes a model name, user prompt, optional system prompt, and optional model
+    parameters, and returns the generated text from the model.
 
     :param model_name: The name of the model to use (e.g. 'gpt-4o-mini').
     :param user_prompt: The user prompt text.
     :param system_prompt: (Optional) A system prompt / context to guide the model.
     :param model_params: (Optional) Dictionary of additional model parameters, if any.
     :return: The generated text from the model.
+    :raises ValueError: If the LiteLLM response format is not recognized.
     """
     messages = []
     if system_prompt is not None:
@@ -73,8 +78,7 @@ async def run_llm_async(
     if model_params:
         logger.info("Model parameters: %s", model_params)
 
-    # Because litellm.completion might be blocking,
-    # run it in a background thread using run_in_executor.
+    # Run it in a background thread using run_in_executor
     loop = asyncio.get_running_loop()
     completion_func = partial(
         litellm.completion,
@@ -84,15 +88,14 @@ async def run_llm_async(
     )
     result = await loop.run_in_executor(None, completion_func)
 
-    # Extract the actual response text from the completion result
+    # Extract the actual response text from the OpenAI completion result
     if hasattr(result, 'choices') and len(result.choices) > 0:
         response = result.choices[0].message.content
+        logger.info("LLM response: %s", (response[:80] + "...") if response else "None")
+        return response
     else:
         logger.error("Unexpected response format from LiteLLM: %s", result)
         raise ValueError("Unexpected response format from LiteLLM")
-
-    return response
-
 
 async def run_embed_async(embed_model: str, text: str) -> List[float]:
     """
@@ -101,22 +104,25 @@ async def run_embed_async(embed_model: str, text: str) -> List[float]:
     :param embed_model: The name of the embedding model (e.g. 'text-embedding-ada-002').
     :param text: The text to be embedded.
     :return: A list of floats representing the embedding vector.
+    :raises ValueError: If the LiteLLM response format is not recognized.
     """
     # Log the request details
     logger.info("Running LiteLLM embedding with model: %s", embed_model)
     logger.info("Text to embed: %s", (text[:70] + "...") if text else "None")
 
+    # Run it in a background thread using run_in_executor
     loop = asyncio.get_running_loop()
     embed_func = partial(litellm.embedding, model=embed_model, input=text)
     result = await loop.run_in_executor(None, embed_func)
 
-    # Parse the embedding result (assuming it's an OpenAI EmbeddingResponse object)
-    try:
-        embedding_vector = result['data'][0]['embedding']
-        logger.info(f"Embedding result: {embedding_vector[:3]} ... {embedding_vector[-3:]}")
+    # Extract the embedding result (assuming it's an OpenAI EmbeddingResponse object)
+    if hasattr(result, 'data') and len(result.data) > 0:
+        embedding_vector = result.data[0]['embedding']
+        logger.info(f"Embedding result: {embedding_vector[:2]} ... {embedding_vector[-2:]}")
         return embedding_vector
-    except AttributeError as e:
-        raise ValueError(f"Unexpected embedding response format from LiteLLM: {e}")
+    else:
+        logger.error("Unexpected embedding response format from LiteLLM: %s", result)
+        raise ValueError("Unexpected embedding response format from LiteLLM")
 
 
 def get_models() -> List[str]:

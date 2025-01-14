@@ -5,7 +5,6 @@ import os
 from typing import Optional, Dict, List, Tuple, NamedTuple
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-import nltk
 import json
 from PySide6.QtCore import QObject, Signal, QThread
 
@@ -240,12 +239,6 @@ class AsyncAnalyzer(QObject):
 class OutputAnalyzer:
     """Class for analyzing and comparing outputs."""
     def __init__(self):
-        # Ensure NLTK resources are available
-        try:
-            nltk.data.find('tokenizers/punkt')
-        except LookupError:
-            nltk.download('punkt', quiet=True)
-            
         # Initialize history
         self.analysis_results: List[AnalysisResult] = []
         

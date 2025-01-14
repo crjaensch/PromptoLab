@@ -23,13 +23,16 @@ class TestOutputAnalyzer(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.analyzer = OutputAnalyzer()
-        
-    @patch('output_analyzer.nltk')
-    async def test_init(self, mock_nltk):
-        # Test that NLTK resources are checked/downloaded during initialization
-        analyzer = OutputAnalyzer()
-        mock_nltk.data.find.assert_called_once_with('tokenizers/punkt')
-        self.assertEqual(analyzer.analysis_results, [])
+        self.test_result = AnalysisResult(
+            input_text="Test input",
+            baseline_output="Expected output",
+            current_output="Actual output",
+            similarity_score=0.85,
+            llm_grade="B",
+            llm_feedback="Good attempt",
+            key_changes=["Change 1", "Change 2"]
+        )
+        self.analyzer.analysis_results = [self.test_result]
 
     async def test_create_async_analyzer(self):
         """Test that create_async_analyzer returns a properly initialized AsyncAnalyzer instance."""
@@ -49,21 +52,7 @@ class TestOutputAnalyzer(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(async_analyzer.feedback)
 
     def test_get_analysis_text(self):
-        # Test with no results
-        self.assertEqual(self.analyzer.get_analysis_text(0), "No analysis available")
-        
-        # Add a mock result and test
-        result = AnalysisResult(
-            input_text="test",
-            baseline_output="baseline",
-            current_output="current",
-            similarity_score=0.85,
-            llm_grade="A",
-            llm_feedback="Good",
-            key_changes=["Change 1", "Change 2"]
-        )
-        self.analyzer.analysis_results.append(result)
-        
+        # Test with valid result from setup
         expected_text = """Semantic Similarity Analysis:
 • Overall Similarity Score: 0.85
 
@@ -71,26 +60,18 @@ Note: Using overall semantic similarity for comparison"""
         
         actual_text = self.analyzer.get_analysis_text(0)
         self.assertEqual(actual_text.rstrip(), expected_text.rstrip())
+        
+        # Test with invalid index
+        self.assertEqual(self.analyzer.get_analysis_text(99), "No analysis available")
 
     def test_get_feedback_text(self):
-        # Test with no results
-        self.assertEqual(self.analyzer.get_feedback_text(0), "No feedback available")
-        
-        # Add a mock result and test
-        result = AnalysisResult(
-            input_text="test",
-            baseline_output="baseline",
-            current_output="current",
-            similarity_score=0.85,
-            llm_grade="A",
-            llm_feedback="Good feedback",
-            key_changes=[]
-        )
-        self.analyzer.analysis_results.append(result)
-        
-        expected_text = "Grade: A\n---\nGood feedback"
+        # Test with valid result from setup
+        expected_text = "Grade: B\n---\nGood attempt"
         actual_text = self.analyzer.get_feedback_text(0)
         self.assertEqual(actual_text.rstrip(), expected_text.rstrip())
+        
+        # Test with invalid index
+        self.assertEqual(self.analyzer.get_feedback_text(99), "No feedback available")
 
     def test_clear_history(self):
         # Add a mock result

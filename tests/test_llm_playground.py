@@ -79,8 +79,8 @@ def test_set_prompt(qtbot, playground_widget):
 def test_parameter_changes(qtbot, playground_widget):
     """Test changing LLM parameters."""
     # Change model
-    playground_widget.model_combo.setCurrentText("gpt-4")
-    assert playground_widget.model_combo.currentText() == "gpt-4"
+    playground_widget.model_combo.setCurrentText("gpt-4o-mini")
+    assert playground_widget.model_combo.currentText() == "gpt-4o-mini"
     
     # Change max tokens
     playground_widget.max_tokens_combo.setCurrentText("1024")
@@ -277,7 +277,7 @@ def test_error_handling(qtbot, playground_widget):
 def test_save_load_state(qtbot, playground_widget, settings):
     """Test saving and loading widget state."""
     # Set up some state
-    playground_widget.model_combo.setCurrentText("gpt-4")
+    playground_widget.model_combo.setCurrentText("gpt-4o-mini")
     playground_widget.max_tokens_combo.setCurrentText("1024")
     playground_widget.temperature_combo.setCurrentText("0.7")
     playground_widget.top_p_combo.setCurrentText("0.9")
@@ -294,7 +294,7 @@ def test_save_load_state(qtbot, playground_widget, settings):
     qtbot.addWidget(new_widget)
     
     # Verify state was restored
-    assert new_widget.model_combo.currentText() == "gpt-4"
+    assert new_widget.model_combo.currentText() == "gpt-4o-mini"
     assert new_widget.max_tokens_combo.currentText() == "1024"
     assert new_widget.temperature_combo.currentText() == "0.7"
     assert new_widget.top_p_combo.currentText() == "0.9"

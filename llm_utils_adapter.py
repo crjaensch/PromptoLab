@@ -175,9 +175,28 @@ class EmbedWorker(QObject):
             self.error.emit(f"{e}\n{tb_str}")
 
         finally:
-            # Clean up the loop
-            if self._loop is not None:
-                self._loop.close()
+            try:
+                # Cancel any pending tasks
+                if self._task and not self._task.done():
+                    self._task.cancel()
+                    # Give it a moment to cancel
+                    if self._loop and self._loop.is_running():
+                        self._loop.run_until_complete(self._task)
+            
+                # Stop the event loop
+                if self._loop and self._loop.is_running():
+                    self._loop.stop()
+            
+                # Close the loop
+                if self._loop and not self._loop.is_closed():
+                    self._loop.close()
+                
+                self._loop = None
+                self._task = None
+                
+            except Exception as e:
+                # If cleanup fails, just log it - don't re-raise
+                print(f"Error during event loop cleanup: {e}")
 
     def cancel(self):
         """Request cancellation of the running task."""

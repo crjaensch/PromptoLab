@@ -2,6 +2,7 @@ __pycache__/
 .promptolab
 *.py[cod]
 *$py.class
+.windsurfrules
 .env
 .venv
 .coverage

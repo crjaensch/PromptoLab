@@ -14,6 +14,9 @@ PromptoLab is a cross-platform desktop application for cataloging, evaluating, t
 
 With PromptoLab, navigating the complexities of prompt design has never been more intuitive or exciting. Ready to optimize your prompt's performance?
 
+![PromptoLab Overview](images/PromptoLab-visual-overview.png)
+
+
 ## Prerequisites
 
 - Python 3.10 or higher

@@ -64,6 +64,12 @@ You can configure your preferred LLM backend and API settings through the applic
   - OpenAI API Key
   - Groq API Key
   - Google Gemini API Key
+- **Logging Level**: Control the verbosity of application logs:
+  - Info: Detailed information about application behavior
+  - Warning: Only potentially concerning issues (default)
+  - Error: Only critical issues that need immediate attention
+
+The application logs are stored in `~/.promptolab/promptolab.log` and are automatically rotated to manage disk usage.
 
 - Note that __locally installed__ LLMs, e.g. via [Ollama](https://ollama.com), are supported for LiteLLM.
 

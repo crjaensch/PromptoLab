@@ -1,6 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 import sys
+import logging
 from typing import List, Dict
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -64,18 +65,32 @@ class EvaluationWidget(QWidget):
         
     def cleanup_threads(self):
         """Clean up any running worker threads."""
+        if getattr(self, '_cleanup_done', False):
+            logging.debug("cleanup_threads() already executed; skipping cleanup.")
+            return
+        self._cleanup_done = True
+        logging.debug("Starting cleanup_threads().")
+        
+        if hasattr(self, 'active_threads') and self.active_threads:
+            for thread in self.active_threads:
+                logging.debug(f"Attempting cleanup for thread {thread} (isRunning: {thread.isRunning()}).")
+                if thread.isRunning():
+                    thread.quit()
+                    logging.debug(f"Called quit() on thread {thread}.")
+                    if not thread.wait(5000):  # 5s timeout
+                        logging.warning(f"Thread {thread} did not exit in time, forcing termination")
+                        thread.terminate()
+                        if not thread.wait(1000):  # Give it one more second after termination
+                            logging.error(f"Thread {thread} could not be terminated")
+                    logging.debug(f"Thread {thread} has finished waiting.")
+        self.active_threads.clear()
+        logging.debug("Completed cleanup_threads().")
+        
         # First cleanup the analyzer if it exists
         if self.current_analyzer:
             self.current_analyzer.cleanup()
             self.current_analyzer = None
             
-        # Then safely cleanup threads
-        for thread in self.active_threads[:]:  # Create a copy of the list to avoid modification during iteration
-            if thread.isRunning():
-                thread.quit()
-                thread.wait()
-        self.active_threads.clear()
-
     def closeEvent(self, event):
         """Handle widget close event."""
         self.cleanup_threads()

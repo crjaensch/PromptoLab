@@ -3,6 +3,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (QMainWindow, QTabWidget, QWidget, QVBoxLayout,
                               QMenuBar, QMenu)
 from PySide6.QtCore import QSettings, Slot
+import logging
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent)
@@ -82,9 +83,26 @@ class MainWindow(QMainWindow):
         dialog.api_changed.connect(self.evaluation_widget.update_models)
         dialog.exec()
 
+    def cleanup(self):
+        """Clean up all widgets with threads before application exit."""
+        logging.debug("Starting MainWindow cleanup...")
+        
+        # Clean up evaluation widget
+        if hasattr(self, 'evaluation_widget'):
+            logging.debug("Cleaning up evaluation widget...")
+            self.evaluation_widget.cleanup_threads()
+            
+        # Clean up playground widget
+        if hasattr(self, 'llm_playground'):
+            logging.debug("Cleaning up playground widget...")
+            self.llm_playground.cleanup_threads()
+            
+        logging.debug("MainWindow cleanup completed.")
+
     def closeEvent(self, event):
         """Save settings when closing the window."""
         self.settings.sync()
+        self.cleanup()
         event.accept()
         
     def on_prompt_selected_for_eval(self, current, previous):

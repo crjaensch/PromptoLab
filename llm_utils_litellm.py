@@ -1,23 +1,26 @@
 # llm_utils_litellm.py
 """
-A module that provides asynchronous methods for usage with litellm.
+A module that provides methods for usage with litellm.
 Requires Python 3.10 or above and the 'litellm' library installed.
 
 Public methods:
-1. run_llm_async(model_name: str, user_prompt: str, 
+1. run_llm(model_name: str, user_prompt: str, 
    system_prompt: Optional[str] = None,
    model_params: Optional[Dict[str, Any]] = None) -> str
 
-2. run_embed_async(embed_model: str, text: str) -> List[float]
+2. run_embed(embed_model: str, text: str) -> List[float]
 
 3. get_models() -> List[str]
 """
 
-import asyncio
-from functools import partial
+import logging
+import os
 from typing import Optional, List, Dict, Any
 import litellm
-import logging
+
+# Configure logging based on config
+level_map = {"Info": "DEBUG", "Warning": "WARNING", "Error": "ERROR"}
+os.environ['LITELLM_LOG'] = level_map.get(os.environ.get('LITELLM_LOG_LEVEL', 'Warning'), 'WARNING')
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,14 +45,14 @@ SUPPORTED_MODELS = [
 ]
 
 
-async def run_llm_async(
+def run_llm(
     model_name: str,
     user_prompt: str,
     system_prompt: Optional[str] = None,
     model_params: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
-    Run a completion call on the specified LLM model asynchronously.
+    Run a completion call on the specified LLM model.
 
     This function is the primary entry point for interacting with LiteLLM models.
     It takes a model name, user prompt, optional system prompt, and optional model
@@ -78,15 +81,11 @@ async def run_llm_async(
     if model_params:
         logger.info("Model parameters: %s", model_params)
 
-    # Run it in a background thread using run_in_executor
-    loop = asyncio.get_running_loop()
-    completion_func = partial(
-        litellm.completion,
+    result = litellm.completion(
         model=model_name,
         messages=messages,
         **model_params
     )
-    result = await loop.run_in_executor(None, completion_func)
 
     # Extract the actual response text from the OpenAI completion result
     if hasattr(result, 'choices') and len(result.choices) > 0:
@@ -97,9 +96,10 @@ async def run_llm_async(
         logger.error("Unexpected response format from LiteLLM: %s", result)
         raise ValueError("Unexpected response format from LiteLLM")
 
-async def run_embed_async(embed_model: str, text: str) -> List[float]:
+
+def run_embed(embed_model: str, text: str) -> List[float]:
     """
-    Asynchronously get an embedding vector for the given text using the specified embed model.
+    Get an embedding vector for the given text using the specified embed model.
 
     :param embed_model: The name of the embedding model (e.g. 'text-embedding-ada-002').
     :param text: The text to be embedded.
@@ -110,10 +110,7 @@ async def run_embed_async(embed_model: str, text: str) -> List[float]:
     logger.info("Running LiteLLM embedding with model: %s", embed_model)
     logger.info("Text to embed: %s", (text[:70] + "...") if text else "None")
 
-    # Run it in a background thread using run_in_executor
-    loop = asyncio.get_running_loop()
-    embed_func = partial(litellm.embedding, model=embed_model, input=text)
-    result = await loop.run_in_executor(None, embed_func)
+    result = litellm.embedding(model=embed_model, input=text)
 
     # Extract the embedding result (assuming it's an OpenAI EmbeddingResponse object)
     if hasattr(result, 'data') and len(result.data) > 0:

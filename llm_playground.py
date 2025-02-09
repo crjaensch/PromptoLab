@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 import json
+import logging
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTextEdit, QComboBox, QLabel, QSplitter,
                               QCheckBox, QProgressDialog, QTableWidget,
@@ -423,19 +424,25 @@ class LLMPlaygroundWidget(QWidget):
             self.progress_dialog.reset()
             self.progress_dialog = None
 
-        if self.worker_thread:
+        self.cleanup_worker()
+
+    def cleanup_worker(self):
+        """Clean up worker thread and worker with proper error handling."""
+        if hasattr(self, 'worker_thread') and self.worker_thread is not None:
+            logging.debug(f"Cleaning up worker thread in LLMPlaygroundWidget")
             self.worker_thread.quit()
-            self.worker_thread.wait()
+            if not self.worker_thread.wait(5000):  # 5s timeout
+                logging.warning("Worker thread did not exit in time, forcing termination")
+                self.worker_thread.terminate()
+                if not self.worker_thread.wait(1000):  # Give it one more second
+                    logging.error("Worker thread could not be terminated")
             self.worker_thread = None
             self.worker = None
 
-    def cleanup_worker(self):
-        """Clean up worker thread and worker."""
-        if hasattr(self, 'worker_thread') and self.worker_thread is not None:
-            self.worker_thread.quit()
-            self.worker_thread.wait()
-            self.worker_thread = None
-            self.worker = None
+    @Slot()
+    def cleanup_threads(self):
+        """Clean up any running worker threads."""
+        self.cleanup_worker()
 
     @Slot()
     def improve_prompt(self):

@@ -1,22 +1,20 @@
 """
-A module that provides asynchronous methods for usage with the llm command line tool.
+A module that provides methods for usage with the llm command line tool.
 Requires Python 3.10 or above and the 'llm' command line tool installed.
 
 Public methods:
-1. run_llm_async(model_name: str, user_prompt: str, 
+1. run_llm(model_name: str, user_prompt: str, 
    system_prompt: Optional[str] = None,
    model_params: Optional[Dict[str, Any]] = None) -> str
 
-2. run_embed_async(embed_model: str, text: str) -> List[float]
+2. run_embed(embed_model: str, text: str) -> List[float]
 
 3. get_models() -> List[str]
 """
 
-import asyncio
 import json
 import logging
 import subprocess
-from functools import partial
 from typing import Optional, List, Dict, Any
 
 # Configure logging
@@ -61,14 +59,14 @@ def _build_llm_command(model: str, system_prompt: Optional[str] = None,
         
     return cmd
 
-async def run_llm_async(
+def run_llm(
     model_name: str,
     user_prompt: str,
     system_prompt: Optional[str] = None,
     model_params: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
-    Asynchronously run a completion call using the llm command line tool.
+    Run a completion call using the llm command line tool.
     
     Args:
         model_name: The name of the model to use (e.g. 'gpt-4o-mini')
@@ -88,20 +86,20 @@ async def run_llm_async(
     cmd = _build_llm_command(model_name, system_prompt, model_params)
     
     # Log the command and input
-    logger.info("Running async LLM command: %s", " ".join(cmd))
+    logger.info("Running LLM command: %s", " ".join(cmd))
     logger.info("User prompt: %s", user_prompt)
     if system_prompt:
         logger.info("System prompt: %s", system_prompt)
 
     # Create subprocess and pipe the user prompt to it
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
+    process = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
     )
     
-    stdout, stderr = await process.communicate(user_prompt.encode())
+    stdout, stderr = process.communicate(user_prompt.encode())
     
     if process.returncode != 0:
         error_msg = stderr.decode().strip()
@@ -117,9 +115,9 @@ async def run_llm_async(
     
     return stdout.decode().strip()
 
-async def run_embed_async(embed_model: str, text: str) -> List[float]:
+def run_embed(embed_model: str, text: str) -> List[float]:
     """
-    Asynchronously get an embedding vector for the given text using the llm command line tool.
+    Get an embedding vector for the given text using the llm command line tool.
 
     :param embed_model: The name of the embedding model.
     :param text: The text to be embedded.
@@ -130,15 +128,15 @@ async def run_embed_async(embed_model: str, text: str) -> List[float]:
     cmd = ["llm", "embed", "-m", embed_model, "-c", "'" + escaped_text + "'"]
     
     # Log the command and input
-    logger.info("Running async LLM embed command: %s", " ".join(cmd))
+    logger.info("Running LLM embed command: %s", " ".join(cmd))
     
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
     )
     
-    stdout, stderr = await process.communicate()
+    stdout, stderr = process.communicate()
     
     # Log raw output for debugging (truncate to 70 chars)
     logger.info("Embed command stdout: %s", (stdout.decode()[:70] + "...") if stdout else "None")

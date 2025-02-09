@@ -37,6 +37,23 @@ class SettingsDialog(QDialog):
             
         api_layout.addWidget(api_label)
         api_layout.addWidget(self.api_combo)
+        layout.addLayout(api_layout)
+
+        # Logging Level Selection
+        log_layout = QHBoxLayout()
+        log_label = QLabel("Logging Level:")
+        self.log_combo = QComboBox()
+        self.log_combo.addItems(["Info", "Warning", "Error"])
+        
+        # Set current value from config
+        current_level = config.log_level
+        index = self.log_combo.findText(current_level)
+        if index >= 0:
+            self.log_combo.setCurrentIndex(index)
+            
+        log_layout.addWidget(log_label)
+        log_layout.addWidget(self.log_combo)
+        layout.addLayout(log_layout)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -52,21 +69,31 @@ class SettingsDialog(QDialog):
         button_layout.addWidget(cancel_button)
         button_layout.addWidget(reset_button)
         
-        # Add layouts to main layout
-        layout.addLayout(api_layout)
         layout.addLayout(button_layout)
-        
         self.setLayout(layout)
         
+    @Slot()
     def save_settings(self):
+        # Save LLM API setting
         new_api = self.api_combo.currentData()
-        if new_api != config.llm_api:  # Only update and emit if value has changed
+        if new_api != config.llm_api:
             config.llm_api = new_api
             self.api_changed.emit(new_api)
+            
+        # Save logging level setting
+        new_level = self.log_combo.currentText()
+        if new_level != config.log_level:
+            config.log_level = new_level
+            
         self.accept()
         
+    @Slot()
     def reset_settings(self):
         config.reset_llm_api()
+        config.reset_log_level()
         index = self.api_combo.findData(config.llm_api)
         if index >= 0:
             self.api_combo.setCurrentIndex(index)
+        index = self.log_combo.findText(config.log_level)
+        if index >= 0:
+            self.log_combo.setCurrentIndex(index)

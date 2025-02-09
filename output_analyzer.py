@@ -1,3 +1,6 @@
+import logging
+logging.debug('output_analyzer module imported.')
+
 from dataclasses import dataclass
 from pathlib import Path
 import sys
@@ -82,7 +85,6 @@ class AsyncAnalyzer(QObject):
         worker.moveToThread(worker_thread)
         
         # Keep track of thread for cleanup
-        # -- may be not needed: worker.thread = thread
         self.active_threads.append(worker_thread)
         self.pending_embeddings.append(worker)
 
@@ -157,7 +159,6 @@ class AsyncAnalyzer(QObject):
             worker.moveToThread(worker_thread)
 
             # Keep track of thread for cleanup
-            # -- may be not needed: worker.thread = worker_thread
             self.active_threads.append(worker_thread)
             self.current_runner = worker
 
@@ -215,26 +216,33 @@ class AsyncAnalyzer(QObject):
             self.error.emit(f"Error processing LLM grade result: {str(e)}")
 
     def cleanup(self):
-        """Clean up any running workers."""
+        logging.debug("AsyncAnalyzer.cleanup() started.")
+        
         # Cancel any pending workers
+        logging.debug('Canceling pending workers.')
         for worker in self.pending_embeddings:
             worker.cancel()
         if self.current_runner:
             self.current_runner.cancel()
         
         # Clean up threads safely
+        logging.debug('Cleaning up threads.')
         for thread in self.active_threads:
             try:
                 thread.quit()
-                # Wait for the thread to exit its event loop
-                if not thread.wait(1000):  # for example, 1s
-                    print("Warning: thread did not exit in time!")
-            except Exception:
-                pass  # Ignore cleanup errors
+                # Wait for the thread to exit its event loop with a longer timeout
+                if not thread.wait(5000):  # 5s timeout
+                    logging.warning(f"Thread {thread} did not exit in time, forcing termination")
+                    thread.terminate()
+                    thread.wait(1000)  # Give it one more second after termination
+            except Exception as e:
+                logging.error(f"Error during thread cleanup: {e}")
         
         self.active_threads.clear()
         self.pending_embeddings.clear()
         self.current_runner = None
+        
+        logging.debug("AsyncAnalyzer.cleanup() completed.")
 
 class OutputAnalyzer:
     """Class for analyzing and comparing outputs."""

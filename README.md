@@ -82,9 +82,8 @@ The application logs are stored in `~/.promptolab/promptolab.log` and are automa
 
 2. Run the application:
    ```bash
-   # If inside PromptoLab, then move to the parent directory
-   cd ..
-   python3 -m PromptoLab
+   # Run from within the PromptoLab directory
+   python3 -m src
    ```
 
 ## Application Screenshots

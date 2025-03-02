@@ -10,7 +10,12 @@ PromptoLab is a cross-platform desktop application for cataloging, evaluating, t
 
 - **Prompts Test Set Manager**: Simplify testing of complex system prompts in generative AI applications. Define and manage test cases to ensure your system prompt guides LLM responses effectively across various user prompts.
 
-- **Evaluation Playground**: Assess the impact of prompt adjustments with ease. This powerful tool helps you evaluate whether modifications to a system prompt enhance or hinder LLM responses across diverse user scenarios, giving you the confidence to optimize with precision.
+- **Evaluation Playground**: Assess the impact of prompt adjustments with ease. This powerful tool helps you evaluate whether modifications to a system prompt enhance or hinder LLM responses across diverse user scenarios. The intuitive comparative grading system uses thumb emojis to clearly indicate performance relative to baseline:
+  - 👎👎 : Significantly worse than baseline
+  - 👎 : Somewhat worse than baseline
+  - 👈 : About the same as baseline
+  - 👍 : Somewhat better than baseline
+  - 👍👍 : Significantly better than baseline
 
 With PromptoLab, navigating the complexities of prompt design has never been more intuitive or exciting. Ready to optimize your prompt's performance?
 

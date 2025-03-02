@@ -90,19 +90,28 @@ class MainWindow(QMainWindow):
         # Clean up evaluation widget
         if hasattr(self, 'evaluation_widget'):
             logging.debug("Cleaning up evaluation widget...")
-            self.evaluation_widget.cleanup_threads()
+            try:
+                self.evaluation_widget.cleanup_threads()
+            except Exception as e:
+                logging.error(f"Error cleaning up evaluation widget: {e}")
             
         # Clean up playground widget
         if hasattr(self, 'llm_playground'):
             logging.debug("Cleaning up playground widget...")
-            self.llm_playground.cleanup_threads()
+            try:
+                self.llm_playground.cleanup_threads()
+            except Exception as e:
+                logging.error(f"Error cleaning up playground widget: {e}")
             
         logging.debug("MainWindow cleanup completed.")
 
     def closeEvent(self, event):
         """Save settings when closing the window."""
         self.settings.sync()
-        self.cleanup()
+        try:
+            self.cleanup()
+        except Exception as e:
+            logging.error(f"Error during cleanup: {e}")
         event.accept()
         
     def on_prompt_selected_for_eval(self, current, previous):

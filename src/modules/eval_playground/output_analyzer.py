@@ -267,12 +267,10 @@ class AsyncAnalyzer(QObject):
         logging.debug('Cleaning up threads.')
         for thread in self.active_threads:
             try:
-                thread.quit()
-                # Wait for the thread to exit its event loop with a longer timeout
-                if not thread.wait(5000):  # 5s timeout
-                    logging.warning(f"Thread {thread} did not exit in time, forcing termination")
-                    thread.terminate()
-                    thread.wait(1000)  # Give it one more second after termination
+                # Use a more aggressive approach - terminate immediately
+                thread.terminate()
+                thread.wait(3000)  # Give it 3 seconds to terminate
+                logging.debug(f"Thread {thread} has been terminated.")
             except Exception as e:
                 logging.error(f"Error during thread cleanup: {e}")
         

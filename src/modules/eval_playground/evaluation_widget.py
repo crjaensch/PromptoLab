@@ -74,19 +74,28 @@ class EvaluationWidget(QWidget):
         self._cleanup_done = True
         logging.debug("Starting cleanup_threads().")
         
+        # First cleanup the analyzer if it exists
+        if hasattr(self, 'output_analyzer'):
+            logging.debug("Cleaning up output analyzer...")
+            self.output_analyzer.clear_history()
+            
+        # Clean up current analyzer if it exists
+        if hasattr(self, 'current_analyzer') and self.current_analyzer:
+            logging.debug("Cleaning up current analyzer...")
+            self.current_analyzer.cleanup()
+            self.current_analyzer = None
+            
         if hasattr(self, 'active_threads') and self.active_threads:
             for thread in self.active_threads:
                 logging.debug(f"Attempting cleanup for thread {thread} (isRunning: {thread.isRunning()}).")
                 if thread.isRunning():
-                    thread.quit()
-                    logging.debug(f"Called quit() on thread {thread}.")
-                    if not thread.wait(5000):  # 5s timeout
-                        logging.warning(f"Thread {thread} did not exit in time, forcing termination")
-                        thread.terminate()
-                        if not thread.wait(1000):  # Give it one more second after termination
-                            logging.error(f"Thread {thread} could not be terminated")
-                    logging.debug(f"Thread {thread} has finished waiting.")
-        self.active_threads.clear()
+                    # Don't try to disconnect all signals - this causes an error
+                    # Instead, just terminate the thread immediately during shutdown
+                    # This is more aggressive but prevents hanging on exit
+                    thread.terminate()
+                    thread.wait(3000)  # Give it 3 seconds to terminate
+                    logging.debug(f"Thread {thread} has been terminated.")
+            self.active_threads.clear()
         logging.debug("Completed cleanup_threads().")
         
         # First cleanup the analyzer if it exists
@@ -96,7 +105,17 @@ class EvaluationWidget(QWidget):
             
     def closeEvent(self, event):
         """Handle widget close event."""
+        # Make sure to clean up any running threads before closing
+        logging.debug("EvaluationWidget closeEvent triggered")
+        
+        # Stop any ongoing operations
+        if hasattr(self, 'output_analyzer'):
+            self.output_analyzer.clear_history()
+            
+        # Clean up threads
         self.cleanup_threads()
+        
+        # Let the parent class handle the rest
         super().closeEvent(event)
         
     def setup_ui(self):
@@ -408,6 +427,10 @@ class EvaluationWidget(QWidget):
         worker.finished.connect(lambda result: self.handle_llm_result(result))
         worker.error.connect(lambda msg: self._handle_error("LLM Error", msg))
         worker_thread.started.connect(worker.run)
+        
+        # Proper cleanup connections
+        worker.finished.connect(worker.deleteLater)
+        worker.error.connect(worker.deleteLater)
         worker_thread.finished.connect(worker_thread.deleteLater)
         
         # Store current state
@@ -724,3 +747,11 @@ class EvaluationWidget(QWidget):
             file.write(html_content)
             
         self.show_status("Evaluation results exported successfully", 5000)
+
+    def __del__(self):
+        """Destructor to ensure proper cleanup."""
+        try:
+            logging.debug("EvaluationWidget destructor called")
+            self.cleanup_threads()
+        except Exception as e:
+            logging.error(f"Error in EvaluationWidget destructor: {e}")

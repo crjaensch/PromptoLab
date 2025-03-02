@@ -89,6 +89,35 @@ class HtmlEvalReport:
     
     def _generate_metadata_section(self, metadata: dict) -> str:
         """Generate the HTML for the metadata section."""
+        
+        # Calculate overall grade emoji if provided in metadata
+        overall_grade_html = ""
+        if "overall_grade" in metadata and "valid_results" in metadata:
+            total_grade = metadata["overall_grade"]
+            valid_results = metadata["valid_results"]
+            
+            if valid_results > 0:
+                # Determine overall emoji grade
+                if total_grade <= -2 * valid_results / 2:
+                    overall_emoji = "👎👎"
+                elif total_grade < 0:
+                    overall_emoji = "👎"
+                elif total_grade == 0:
+                    overall_emoji = "👈"
+                elif total_grade < 2 * valid_results / 2:
+                    overall_emoji = "👍"
+                else:
+                    overall_emoji = "👍👍"
+                    
+                overall_grade_html = f"""
+                    <dt>Overall Grade:</dt>
+                    <dd>
+                        <div style="font-size: 18px; font-weight: bold;">
+                            {overall_emoji} ({total_grade:+d})
+                        </div>
+                    </dd>
+                """
+        
         return f"""
             <div class="metadata">
                 <h2>Evaluation Details</h2>
@@ -104,6 +133,8 @@ class HtmlEvalReport:
 
                     <dt>New System Prompt:</dt>
                     <dd>{self.md.convert(metadata.get('new_system_prompt', 'N/A'))}</dd>
+                    
+                    {overall_grade_html}
                     
                     <dt>Grading Scale:</dt>
                     <dd>

@@ -159,6 +159,23 @@ class EvaluationWidget(QWidget):
         """)
         upper_layout.addWidget(self.system_prompt_input)
         
+        # Overall grade label - positioned above the results table
+        self.overall_grade_label = QLabel("")
+        self.overall_grade_label.setAlignment(Qt.AlignCenter)
+        self.overall_grade_label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: bold;
+                padding: 8px;
+                margin: 8px 0;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background: #f8f8f8;
+            }
+        """)
+        self.overall_grade_label.hide()  # Initially hidden
+        upper_layout.addWidget(self.overall_grade_label)
+        
         # Results Table
         self.results_table = QTableWidget()
         self.results_table.setColumnCount(5)
@@ -354,6 +371,9 @@ class EvaluationWidget(QWidget):
             # Clear analyzer history
             self.output_analyzer.clear_history()
             
+            # Hide overall grade label
+            self.overall_grade_label.hide()
+            
             # Show progress bar and disable buttons
             self.progress_bar.show()
             self.progress_bar.setMaximum(len(self.current_test_set.cases))
@@ -466,10 +486,71 @@ class EvaluationWidget(QWidget):
         # Reset UI state
         self.progress_bar.hide()
         self.run_button.setEnabled(True)
-        self.export_button.setEnabled(True)  # Enable export button after completion
+        self.export_button.setEnabled(True)
+        
+        # Calculate and display overall grade
+        self._calculate_overall_grade()
         
         # Show completion message
         self.show_status("Evaluation run completed!", 5000)
+        
+    def _calculate_overall_grade(self):
+        """Calculate the overall grade across all test cases."""
+        if not self.evaluation_results:
+            return
+            
+        # Map emoji grades back to numerical values
+        emoji_to_grade = {
+            "👎👎": -2,
+            "👎": -1,
+            "👈": 0,
+            "👍": 1,
+            "👍👍": 2
+        }
+        
+        # Sum up all grades
+        total_grade = 0
+        valid_results = 0
+        
+        for result in self.evaluation_results:
+            if result.llm_grade in emoji_to_grade:
+                total_grade += emoji_to_grade[result.llm_grade]
+                valid_results += 1
+        
+        if valid_results == 0:
+            return
+            
+        # Determine overall emoji grade
+        if total_grade <= -2 * valid_results / 2:
+            overall_emoji = "👎👎"
+            bg_color = "#ffcccc"  # Light red
+        elif total_grade < 0:
+            overall_emoji = "👎"
+            bg_color = "#ffe6cc"  # Light orange
+        elif total_grade == 0:
+            overall_emoji = "👈"
+            bg_color = "#f8f8f8"  # Light gray
+        elif total_grade < 2 * valid_results / 2:
+            overall_emoji = "👍"
+            bg_color = "#d4edda"  # Light green
+        else:
+            overall_emoji = "👍👍"
+            bg_color = "#c3e6cb"  # Green
+            
+        # Display the overall grade with color
+        self.overall_grade_label.setText(f"Overall Evaluation: {overall_emoji} ({total_grade:+d})")
+        self.overall_grade_label.setStyleSheet(f"""
+            QLabel {{
+                font-size: 16px;
+                font-weight: bold;
+                padding: 8px;
+                margin: 8px 0;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background: {bg_color};
+            }}
+        """)
+        self.overall_grade_label.show()
         
     def _handle_error(self, title, message):
         """Handle errors during evaluation by emitting signal."""
@@ -617,6 +698,22 @@ class EvaluationWidget(QWidget):
             'new_system_prompt': self.system_prompt_input.toPlainText(),
             'model_name': self.model_combo.currentText()
         }
+        
+        # Add overall grade to metadata
+        emoji_to_grade = {
+            "👎👎": -2, "👎": -1, "👈": 0, "👍": 1, "👍👍": 2
+        }
+        
+        total_grade = 0
+        valid_results = 0
+        
+        for result in self.evaluation_results:
+            if result.llm_grade in emoji_to_grade:
+                total_grade += emoji_to_grade[result.llm_grade]
+                valid_results += 1
+                
+        metadata['overall_grade'] = total_grade
+        metadata['valid_results'] = valid_results
         
         # Generate HTML report
         report_generator = HtmlEvalReport()

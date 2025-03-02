@@ -4,11 +4,11 @@ import json
 from typing import Optional, List
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent)
+project_root = str(Path(__file__).parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from models import TestSet
+from src.storage.models import TestSet
 
 class TestSetStorage:
     def __init__(self, base_dir: str = "test_sets"):

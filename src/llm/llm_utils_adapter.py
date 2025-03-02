@@ -10,13 +10,13 @@ from typing import Optional, Dict, Any
 logging.debug('llm_utils_adapter module imported.')
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent)
+project_root = str(Path(__file__).parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-import llm_utils_litellm
-import llm_utils_llmcmd
-from config import config
+from src.llm import llm_utils_litellm
+from src.llm import llm_utils_llmcmd
+from src.config import config
 
 class LLMWorker(QObject):
     """Worker that runs llm_utils_xxx.run_llm depending on the configured LLM API."""

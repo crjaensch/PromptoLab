@@ -11,5 +11,6 @@
         "promptolab",
         "litellm",
         "llmcmd",
+        "deepeval"
     ]
 }

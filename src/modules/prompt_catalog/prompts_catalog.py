@@ -8,13 +8,13 @@ from PySide6.QtCore import Qt, Signal, Slot
 from datetime import datetime
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent)
+project_root = str(Path(__file__).parent.parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from models import Prompt, PromptType
-from collapsible_panel import CollapsiblePanel
-from expandable_text import ExpandableTextWidget
+from src.storage.models import Prompt, PromptType
+from src.utils.collapsible_panel import CollapsiblePanel
+from src.utils.expandable_text import ExpandableTextWidget
 
 class PromptsCatalogWidget(QWidget):
     prompt_selected_for_eval = Signal(QListWidgetItem, QListWidgetItem)

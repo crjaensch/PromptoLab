@@ -8,13 +8,14 @@ from PySide6.QtCore import Qt, QSettings, Signal, QObject
 import numpy as np
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent.parent)
+project_root = str(Path(__file__).parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from evaluation_widget import EvaluationWidget
-from models import TestSet, TestCase
-from output_analyzer import AnalysisResult, OutputAnalyzer
+from src.modules.eval_playground.evaluation_widget import EvaluationWidget
+from src.storage.models import TestSet, TestCase
+from src.modules.eval_playground.output_analyzer import AnalysisResult, OutputAnalyzer
+from src.modules.eval_playground.html_eval_report import HtmlEvalReport
 
 @pytest.fixture
 def evaluation_widget(qtbot, qapp):
@@ -36,7 +37,7 @@ def test_initial_state(evaluation_widget):
     assert evaluation_widget.model_combo.count() > 0
     assert evaluation_widget.model_combo.currentText() != ""
 
-@patch('evaluation_widget.TestSetStorage')
+@patch('src.modules.eval_playground.evaluation_widget.TestSetStorage')
 def test_load_test_sets(mock_storage, qtbot, evaluation_widget):
     """Test loading test sets into the combo box."""
     # Create mock test sets
@@ -160,7 +161,7 @@ def test_update_test_set(qtbot, evaluation_widget):
     )
     
     # Mock storage to return our test sets
-    with patch('evaluation_widget.TestSetStorage') as mock_storage:
+    with patch('src.modules.eval_playground.evaluation_widget.TestSetStorage') as mock_storage:
         mock_storage_instance = mock_storage.return_value
         mock_storage_instance.get_all_test_sets.return_value = ["Test Set 1", "Test Set 2"]
         mock_storage_instance.load_test_set.side_effect = lambda name: test_set1 if name == "Test Set 1" else test_set2

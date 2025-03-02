@@ -6,17 +6,17 @@ from PySide6.QtCore import QSettings, Slot
 import logging
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent)
+project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from prompts_catalog import PromptsCatalogWidget
-from llm_playground import LLMPlaygroundWidget
-from test_set_manager import TestSetManagerWidget
-from evaluation_widget import EvaluationWidget
-from storage import FileStorage
-from test_storage import TestSetStorage
-from settings_dialog import SettingsDialog
+from src.modules.prompt_catalog.prompts_catalog import PromptsCatalogWidget
+from src.modules.llm_playground.llm_playground import LLMPlaygroundWidget
+from src.modules.test_set_manager.test_set_manager import TestSetManagerWidget
+from src.modules.eval_playground.evaluation_widget import EvaluationWidget
+from src.storage.storage import FileStorage
+from src.storage.test_storage import TestSetStorage
+from src.utils.settings_dialog import SettingsDialog
 
 class MainWindow(QMainWindow):
     def __init__(self, prompt_storage: FileStorage, test_set_storage: TestSetStorage):

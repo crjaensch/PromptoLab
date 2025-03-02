@@ -5,11 +5,11 @@ from pathlib import Path
 import sys
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent)
+project_root = str(Path(__file__).parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from config import config
+from src.config import config
 
 class SettingsDialog(QDialog):
     api_changed = Signal(str)  # Signal to emit when API changes

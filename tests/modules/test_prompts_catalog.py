@@ -6,12 +6,12 @@ import sys
 from pathlib import Path
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent.parent)
+project_root = str(Path(__file__).parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from models import Prompt, PromptType
-from prompts_catalog import PromptsCatalogWidget
+from src.storage.models import Prompt, PromptType
+from src.modules.prompt_catalog.prompts_catalog import PromptsCatalogWidget
 
 class MockStorage:
     def __init__(self):

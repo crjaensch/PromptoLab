@@ -1,24 +1,34 @@
-from pathlib import Path
 import sys
-import json
+from pathlib import Path
 import logging
+import json
+import traceback
+import re
+from datetime import datetime
+from typing import Optional, List, Dict, Any
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTextEdit, QComboBox, QLabel, QSplitter,
-                              QCheckBox, QProgressDialog, QTableWidget,
-                              QTableWidgetItem, QHeaderView, QFrame, QSizePolicy)
-from PySide6.QtCore import Qt, Slot, QThread, Signal
+                              QFrame, QCheckBox, QSpinBox, QMessageBox,
+                              QProgressBar, QApplication, QTableWidget, 
+                              QTableWidgetItem, QHeaderView, QSizePolicy,
+                              QProgressDialog)
+from PySide6.QtCore import Qt, Signal, Slot, QThread, QSettings
+from PySide6.QtGui import QTextCursor, QColor
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent)
+project_root = str(Path(__file__).parent.parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from collapsible_panel import CollapsiblePanel
-from expandable_text import ExpandableTextWidget
-from llm_utils_adapter import LLMWorker
-from special_prompts import (get_TAG_pattern_improvement_prompt,
+from src.storage.models import Prompt
+from src.llm.llm_utils_adapter import LLMWorker
+from src.utils.expandable_text import ExpandableTextWidget
+from src.config import config
+from src.utils.collapsible_panel import CollapsiblePanel
+from src.llm.special_prompts import (get_TAG_pattern_improvement_prompt,
                              get_PIC_pattern_improvement_prompt,
                              get_LIFE_pattern_improvement_prompt)
+
 class LLMPlaygroundWidget(QWidget):
     def __init__(self, settings, parent=None):
         super().__init__(parent)

@@ -11,7 +11,7 @@ project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from output_analyzer import OutputAnalyzer, AnalysisResult, AnalysisError, LLMError, SimilarityError, AsyncAnalyzer
+from src.modules.eval_playground.output_analyzer import OutputAnalyzer, AnalysisResult, AnalysisError, LLMError, SimilarityError, AsyncAnalyzer
 
 class TestOutputAnalyzer(unittest.IsolatedAsyncioTestCase):
     @classmethod

@@ -11,8 +11,8 @@ project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from main_window import MainWindow
-from models import Prompt, PromptType
+from src.main_window import MainWindow
+from src.storage.models import Prompt, PromptType
 
 @pytest.fixture
 def main_window(qtbot, qapp):

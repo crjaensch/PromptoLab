@@ -9,7 +9,7 @@ project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from expandable_text import ExpandableTextWidget
+from src.utils.expandable_text import ExpandableTextWidget
 
 @pytest.fixture
 def text_widget(qtbot):

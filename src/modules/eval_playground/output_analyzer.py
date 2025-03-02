@@ -12,12 +12,12 @@ import json
 from PySide6.QtCore import QObject, Signal, QThread
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent)
+project_root = str(Path(__file__).parent.parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from llm_utils_adapter import LLMWorker, EmbedWorker
-from special_prompts import (get_grader_system_prompt,
+from src.llm.llm_utils_adapter import LLMWorker, EmbedWorker
+from src.llm.special_prompts import (get_grader_system_prompt,
                             get_grader_instructions)
 
 class AnalysisError(Exception):

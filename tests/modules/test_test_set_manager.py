@@ -7,12 +7,13 @@ from PySide6.QtCore import Qt, Signal, QObject, QSettings
 from PySide6.QtWidgets import QApplication, QPushButton, QMessageBox, QTableWidgetItem
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent.parent)
+project_root = str(Path(__file__).parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from test_set_manager import TestSetManagerWidget, BaselineGeneratorWorker
-from models import TestSet, TestCase
+from src.modules.test_set_manager.test_set_manager import TestSetManagerWidget, BaselineGeneratorWorker
+from src.storage.models import TestSet, TestCase
+from src.storage.test_storage import TestSetStorage
 
 @pytest.fixture
 def manager_widget(qtbot, qapp):
@@ -85,8 +86,8 @@ class MockRunner(QObject):
         """Simulate the run method of LLMWorker."""
         self.finished.emit("Generated baseline output")
 
-@patch('test_set_manager.QProgressDialog')
-@patch('test_set_manager.LLMWorker')
+@patch('src.modules.test_set_manager.test_set_manager.QProgressDialog')
+@patch('src.modules.test_set_manager.test_set_manager.LLMWorker')
 def test_generate_baseline(mock_llm_worker, mock_progress_dialog, qtbot, manager_widget):
     """Test generating baseline outputs for test cases."""
     # Setup mock progress dialog
@@ -149,7 +150,7 @@ def test_generate_baseline(mock_llm_worker, mock_progress_dialog, qtbot, manager
     for i in range(len(test_prompts)):
         assert manager_widget.cases_table.item(i, 1).text() == "Generated baseline output"
 
-@patch('test_set_manager.TestSetStorage')
+@patch('src.storage.test_storage.TestSetStorage')
 def test_save_load_test_set(mock_storage, qtbot, manager_widget):
     """Test saving and loading a test set."""
     # Create test data

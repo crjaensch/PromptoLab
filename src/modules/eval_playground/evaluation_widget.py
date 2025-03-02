@@ -1,28 +1,31 @@
-from datetime import datetime
-from pathlib import Path
 import sys
+from pathlib import Path
+import json
 import logging
-from typing import List, Dict
-
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                              QComboBox, QPushButton, QTextEdit, QProgressBar,
-                              QTableWidget, QTableWidgetItem, QMessageBox,
-                              QGroupBox, QSplitter, QTabWidget,
-                              QHeaderView, QFileDialog)
-from PySide6.QtCore import Qt, Signal, Slot, QSettings, QThread, Qt, QMetaObject, Q_ARG
+import os
+from datetime import datetime
+from typing import List, Dict, Any, Optional, Tuple
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
+                              QTextEdit, QComboBox, QLabel, QSplitter,
+                              QTableWidget, QTableWidgetItem, QHeaderView,
+                              QProgressBar, QMessageBox, QFileDialog,
+                              QTabWidget, QScrollArea, QFrame, QCheckBox,
+                              QSpinBox, QApplication)
+from PySide6.QtCore import Qt, Signal, Slot, QThread, QSettings, QSize, QMetaObject, Q_ARG
+from PySide6.QtGui import QColor
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent)
+project_root = str(Path(__file__).parent.parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from models import TestSet
-from test_storage import TestSetStorage
-from output_analyzer import (OutputAnalyzer, AnalysisResult, AnalysisError,
-                           LLMError, SimilarityError)
-from llm_utils_adapter import LLMWorker
-from expandable_text import ExpandableTextWidget
-from html_eval_report import HtmlEvalReport
+from src.storage.models import TestSet, TestCase
+from src.storage.test_storage import TestSetStorage
+from src.llm.llm_utils_adapter import LLMWorker
+from src.utils.expandable_text import ExpandableTextWidget
+from src.modules.eval_playground.output_analyzer import OutputAnalyzer
+from src.modules.eval_playground.html_eval_report import HtmlEvalReport
+from src.config import config
 
 class EvaluationWidget(QWidget):
     test_set_updated = Signal(TestSet)  # Signal emitted when test set is updated

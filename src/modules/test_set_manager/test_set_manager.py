@@ -1,22 +1,28 @@
-from datetime import datetime
-import uuid
-from pathlib import Path
 import sys
+from pathlib import Path
+import json
+import os
+import logging
+import uuid
+from datetime import datetime
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                              QTableWidget, QTableWidgetItem, QTextEdit, 
-                              QComboBox, QLabel, QLineEdit, QHeaderView, QDialog, 
-                              QDialogButtonBox, QProgressDialog)
-from PySide6.QtCore import Qt, Signal, QObject, QSettings, QThread
+                              QTextEdit, QComboBox, QLabel, QSplitter,
+                              QTableWidget, QTableWidgetItem, QHeaderView,
+                              QLineEdit, QMessageBox, QMenu, QInputDialog,
+                              QFileDialog, QDialog, QDialogButtonBox,
+                              QProgressDialog)
+from PySide6.QtCore import Qt, Signal, Slot, QSettings, QObject, QThread
+from PySide6.QtGui import QAction
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent)
+project_root = str(Path(__file__).parent.parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from models import TestSet, TestCase
-from test_storage import TestSetStorage
-from llm_utils_adapter import LLMWorker
-from expandable_text import ExpandableTextWidget
+from src.storage.models import TestSet, TestCase
+from src.utils.expandable_text import ExpandableTextWidget
+from src.storage.test_storage import TestSetStorage
+from src.llm.llm_utils_adapter import LLMWorker
 
 class BaselineGeneratorSignals(QObject):
     """Signals for the baseline generator."""

@@ -6,14 +6,14 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 
 # Add the project root directory to Python path
-project_root = str(Path(__file__).parent)
+project_root = str(Path(__file__).parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from main_window import MainWindow
-from storage import FileStorage
-from test_storage import TestSetStorage
-from config import config  # Import the config module
+from src.main_window import MainWindow
+from src.storage.storage import FileStorage
+from src.storage.test_storage import TestSetStorage
+from src.config import config  # Import the config module
 
 # Define the base directory for prompts and test_sets
 try:

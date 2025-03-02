@@ -195,17 +195,55 @@ class AsyncAnalyzer(QObject):
                 # Rest is feedback
                 feedback = '\n'.join(lines[1:]).strip()
             
+            # Validate and normalize the grade format
+            try:
+                # Check if the grade is in the comparative format (-2, -1, 0, +1, +2)
+                # Remove any spaces and ensure + sign is preserved
+                normalized_grade = grade.replace(" ", "")
+                
+                # Map numerical grades to thumb emojis
+                grade_to_emoji = {
+                    "-2": "👎👎",  # Two thumbs down
+                    "-1": "👎",    # One thumb down
+                    "0": "👈",     # Thumb pointing left (horizontal)
+                    "+1": "👍",    # One thumb up
+                    "+2": "👍👍",  # Two thumbs up
+                    "1": "👍",     # Handle without + sign
+                    "2": "👍👍"    # Handle without + sign
+                }
+                
+                # Store both the numerical grade (for sorting/filtering) and the emoji (for display)
+                if normalized_grade in grade_to_emoji:
+                    emoji_grade = grade_to_emoji[normalized_grade]
+                    # Keep the numerical grade as part of the object for potential sorting/filtering
+                    numerical_grade = normalized_grade
+                    if normalized_grade == "1":
+                        numerical_grade = "+1"
+                    elif normalized_grade == "2":
+                        numerical_grade = "+2"
+                    display_grade = emoji_grade
+                else:
+                    # If not in expected format, use as-is with a warning
+                    display_grade = f"{normalized_grade} (invalid)"
+                    numerical_grade = normalized_grade
+                    logging.warning(f"Unexpected grade format: {grade}")
+            except Exception as e:
+                display_grade = grade  # Use original if parsing fails
+                numerical_grade = grade
+                logging.warning(f"Error normalizing grade: {e}")
+            
             # Create final result
             analysis_result = AnalysisResult(
                 input_text=self.input_text,
                 baseline_output=self.baseline,
                 current_output=self.current,
                 similarity_score=similarity,
-                llm_grade=grade,
+                llm_grade=display_grade,
                 llm_feedback=feedback,
                 key_changes=[
                     "Using overall semantic similarity for comparison",
-                    "Similarity score represents whole text comparison"
+                    "Similarity score represents whole text comparison",
+                    "Grade scale: 👎👎 (much worse) 👎 (worse) 👈 (same) 👍 (better) 👍👍 (much better)"
                 ]
             )
             
@@ -214,7 +252,7 @@ class AsyncAnalyzer(QObject):
             
         except Exception as e:
             self.error.emit(f"Error processing LLM grade result: {str(e)}")
-
+            
     def cleanup(self):
         logging.debug("AsyncAnalyzer.cleanup() started.")
         
@@ -278,4 +316,12 @@ class OutputAnalyzer:
             return "No feedback available"
             
         result = self.analysis_results[index]
-        return f"Grade: {result.llm_grade}\n---\n{result.llm_feedback}"
+        grade_explanation = """
+Comparative Grading Scale:
+👎👎 : Significantly worse than baseline (-2)
+👎   : Somewhat worse than baseline (-1)
+👈   : About the same as baseline (0)
+👍   : Somewhat better than baseline (+1)
+👍👍 : Significantly better than baseline (+2)
+"""
+        return f"Grade: {result.llm_grade}\n---\n{grade_explanation}\n---\n{result.llm_feedback}"

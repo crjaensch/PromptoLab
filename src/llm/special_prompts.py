@@ -293,11 +293,16 @@ You are an expert evaluator of language model outputs. Your task is to:
 1. Compare the quality and correctness of two outputs (baseline and current) for the same user prompt
 2. Assess how well each output addresses the user's needs
 3. Identify key differences in approach, style, or content
-4. Provide a letter grade (A, B, C, D, F) for the current output relative to the baseline
+4. Provide a comparative grade on a scale from -2 to +2 where:
+   * -2: Significantly worse than baseline
+   * -1: Somewhat worse than baseline
+   * 0: About the same as baseline
+   * +1: Somewhat better than baseline
+   * +2: Significantly better than baseline
 5. Give detailed feedback explaining your grade and assessment
 
 Format your response as:
-Grade: [letter grade]
+Grade: [comparative grade (-2, -1, 0, +1, or +2)]
 ---
 [detailed feedback]
 '''

@@ -104,6 +104,17 @@ class HtmlEvalReport:
 
                     <dt>New System Prompt:</dt>
                     <dd>{self.md.convert(metadata.get('new_system_prompt', 'N/A'))}</dd>
+                    
+                    <dt>Grading Scale:</dt>
+                    <dd>
+                        <div style="display: grid; grid-template-columns: 80px 1fr; gap: 5px; align-items: center;">
+                            <div>👎👎</div><div>Significantly worse than baseline (-2)</div>
+                            <div>👎</div><div>Somewhat worse than baseline (-1)</div>
+                            <div>👈</div><div>About the same as baseline (0)</div>
+                            <div>👍</div><div>Somewhat better than baseline (+1)</div>
+                            <div>👍👍</div><div>Significantly better than baseline (+2)</div>
+                        </div>
+                    </dd>
                 </dl>
             </div>
             <table>

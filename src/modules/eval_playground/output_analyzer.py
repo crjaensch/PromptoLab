@@ -314,12 +314,4 @@ class OutputAnalyzer:
             return "No feedback available"
             
         result = self.analysis_results[index]
-        grade_explanation = """
-Comparative Grading Scale:
-👎👎 : Significantly worse than baseline (-2)
-👎   : Somewhat worse than baseline (-1)
-👈   : About the same as baseline (0)
-👍   : Somewhat better than baseline (+1)
-👍👍 : Significantly better than baseline (+2)
-"""
-        return f"Grade: {result.llm_grade}\n---\n{grade_explanation}\n---\n{result.llm_feedback}"
+        return f"Grade: {result.llm_grade}\n---\n{result.llm_feedback}"

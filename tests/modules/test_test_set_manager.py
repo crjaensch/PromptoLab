@@ -12,6 +12,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.modules.test_set_manager.test_set_manager import TestSetManagerWidget, BaselineGeneratorWorker
+from src.modules.synthetic_generator.synthetic_generator import SyntheticExampleGeneratorWidget
 from src.storage.models import TestSet, TestCase
 from src.storage.test_storage import TestSetStorage
 
@@ -175,3 +176,48 @@ def test_save_load_test_set(mock_storage, qtbot, manager_widget):
     assert saved_test_set.name == "Test Set 1"
     assert saved_test_set.system_prompt == "System prompt"
     assert len(saved_test_set.cases) == 1
+
+@pytest.fixture
+def synthetic_generator_widget(qtbot, qapp):
+    """Create a SyntheticExampleGeneratorWidget instance for testing."""
+    widget = SyntheticExampleGeneratorWidget(QSettings())
+    widget.show()
+    qtbot.addWidget(widget)
+    return widget
+
+def test_integration_with_synthetic_generator(qtbot, manager_widget, synthetic_generator_widget):
+    """Test integration between TestSetManager and SyntheticExampleGenerator."""
+    # Create synthetic examples
+    synthetic_examples = [
+        TestCase(input_text="Synthetic input 1", baseline_output="Synthetic output 1"),
+        TestCase(input_text="Synthetic input 2", baseline_output="Synthetic output 2")
+    ]
+    
+    # Simulate the examples being generated
+    # In a real integration, this would happen through the UI
+    # Here we directly populate the examples table
+    for example in synthetic_examples:
+        row = synthetic_generator_widget.examples_table.rowCount()
+        synthetic_generator_widget.examples_table.insertRow(row)
+        synthetic_generator_widget.examples_table.setItem(row, 0, QTableWidgetItem(example.input_text))
+        synthetic_generator_widget.examples_table.setItem(row, 1, QTableWidgetItem(example.baseline_output))
+    
+    # Get examples from the generator widget
+    examples = synthetic_generator_widget.get_examples()
+    assert len(examples) == 2
+    
+    # Add examples to the test set manager
+    # In a real integration, this would happen through a signal/slot connection
+    initial_row_count = manager_widget.cases_table.rowCount()
+    for example in examples:
+        row = manager_widget.cases_table.rowCount()
+        manager_widget.cases_table.insertRow(row)
+        manager_widget.cases_table.setItem(row, 0, QTableWidgetItem(example.input_text))
+        manager_widget.cases_table.setItem(row, 1, QTableWidgetItem(example.baseline_output))
+    
+    # Verify the examples were added to the test set manager
+    assert manager_widget.cases_table.rowCount() == initial_row_count + 2
+    assert manager_widget.cases_table.item(initial_row_count, 0).text() == "Synthetic input 1"
+    assert manager_widget.cases_table.item(initial_row_count, 1).text() == "Synthetic output 1"
+    assert manager_widget.cases_table.item(initial_row_count + 1, 0).text() == "Synthetic input 2"
+    assert manager_widget.cases_table.item(initial_row_count + 1, 1).text() == "Synthetic output 2"

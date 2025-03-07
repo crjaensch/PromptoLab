@@ -23,6 +23,12 @@ from src.storage.models import TestSet, TestCase
 from src.utils.expandable_text import ExpandableTextWidget
 from src.storage.test_storage import TestSetStorage
 from src.llm.llm_utils_adapter import LLMWorker
+# Import the synthetic example generator
+try:
+    from src.modules.synthetic_generator.synthetic_generator import SyntheticExampleGeneratorWidget
+    HAS_SYNTHETIC_GENERATOR = True
+except ImportError:
+    HAS_SYNTHETIC_GENERATOR = False
 
 class BaselineGeneratorSignals(QObject):
     """Signals for the baseline generator."""
@@ -145,6 +151,11 @@ class TestSetManagerWidget(QWidget):
         self.save_btn = QPushButton("Save Test Set")
         self.load_btn = QPushButton("Load Test Set")
         
+        # Add synthetic example generator button if available
+        if HAS_SYNTHETIC_GENERATOR:
+            self.synthetic_examples_btn = QPushButton("Generate Synthetic Examples")
+            button_layout.addWidget(self.synthetic_examples_btn)
+        
         button_layout.addWidget(self.add_case_btn)
         button_layout.addWidget(self.remove_case_btn)
         button_layout.addWidget(self.generate_baseline_btn)
@@ -158,6 +169,10 @@ class TestSetManagerWidget(QWidget):
         self.generate_baseline_btn.clicked.connect(self.generate_baseline)
         self.save_btn.clicked.connect(self.save_test_set)
         self.load_btn.clicked.connect(self.load_test_set)
+        
+        # Connect synthetic example generator if available
+        if HAS_SYNTHETIC_GENERATOR:
+            self.synthetic_examples_btn.clicked.connect(self.open_synthetic_generator)
         
     def showEvent(self, event):
         """Handle the widget being shown for the first time."""
@@ -347,3 +362,56 @@ class TestSetManagerWidget(QWidget):
             self.system_prompt.setFixedHeight(400)  # Expanded height
         else:
             self.system_prompt.setFixedHeight(35)   # Collapsed height
+            
+    def open_synthetic_generator(self):
+        """Open the synthetic example generator dialog."""
+        if not HAS_SYNTHETIC_GENERATOR:
+            self.show_status("Synthetic example generator module is not available.", 5000)
+            return
+            
+        # Create the dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Generate Synthetic Examples")
+        dialog.setMinimumWidth(800)
+        dialog.setMinimumHeight(600)
+        
+        # Create the synthetic example generator widget
+        generator_widget = SyntheticExampleGeneratorWidget(self.settings)
+        
+        # Set up the dialog layout
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(generator_widget)
+        
+        # Add buttons at the bottom
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+        
+        # Connect the add_to_test_set_btn to add examples to test set manager
+        generator_widget.add_to_test_set_btn.clicked.connect(
+            lambda: self.add_synthetic_examples(generator_widget.get_examples())
+        )
+        
+        # Show the dialog
+        if dialog.exec() == QDialog.Accepted:
+            # If dialog was accepted, add any generated examples to the test set
+            examples = generator_widget.get_examples()
+            if examples:
+                self.add_synthetic_examples(examples)
+                
+    def add_synthetic_examples(self, examples):
+        """Add synthetic examples to the test set."""
+        if not examples:
+            return
+            
+        # Add each example to the test cases table
+        for example in examples:
+            row = self.cases_table.rowCount()
+            self.cases_table.insertRow(row)
+            self.cases_table.setItem(row, 0, QTableWidgetItem(example.input_text))
+            self.cases_table.setItem(row, 1, QTableWidgetItem(example.baseline_output))
+            
+        self.show_status(f"Added {len(examples)} synthetic examples to the test set.", 5000)

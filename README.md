@@ -8,7 +8,7 @@ PromptoLab is a cross-platform desktop application for cataloging, evaluating, t
 
 - **LLM Playground**: Dive into experimentation with two dynamic options. Choose to submit a selected prompt from your catalog or request improvements for a given prompt using one of three proven prompt patterns. Customize your experience further by selecting your preferred LLM model and tweaking three critical LLM control parameters. Support for {{variable}} syntax in prompts enables quick testing of prompt variations through an interactive variables table.
 
-- **Prompts Test Set Manager**: Simplify testing of complex system prompts in generative AI applications. Define and manage test cases to ensure your system prompt guides LLM responses effectively across various user prompts.
+- **Prompts Test Set Manager**: Simplify testing of complex system prompts in generative AI applications. Define and manage test cases to ensure your system prompt guides LLM responses effectively across various user prompts. Includes a new synthetic example generator that automatically creates diverse test cases using LLMs.
 
 - **Evaluation Playground**: Assess the impact of prompt adjustments with ease. This powerful tool helps you evaluate whether modifications to a system prompt enhance or hinder LLM responses across diverse user scenarios. The intuitive comparative grading system uses thumb emojis to clearly indicate performance relative to baseline:
   - 👎👎 : Significantly worse than baseline
@@ -109,6 +109,19 @@ Here's a quick visual overview of PromptoLab's main features:
 
 ### Test Set Manager
 ![Test Set Manager for systematic prompt test set definition](images/TestSet-Manager-Screen.png)
+
+### Synthetic Example Generator
+The Synthetic Example Generator is a powerful new feature that helps you automatically create diverse test cases for your prompts using LLM models. This tool saves you time and effort by generating high-quality examples based on your task description.
+
+**Key capabilities:**
+- Generate multiple test cases in one click based on your task description
+- Customize the number of examples to generate (1-20)
+- Adjust diversity level to control how varied the examples should be
+- Set complexity level to determine how challenging the examples should be
+- Select from multiple LLM models to power the generation process
+- Seamlessly add generated examples to your test sets
+
+Access this feature directly from the Test Set Manager by clicking the "Generate Synthetic Examples" button. The generated examples include both user inputs and expected outputs, ready to be used in your prompt testing workflow.
 
 ### Eval Playground
 ![Evaluation Playground for assessing prompt performance](images/Eval-Playground-Screen.png)

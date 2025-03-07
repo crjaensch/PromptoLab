@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTextEdit, QComboBox, QLabel, QSpinBox,
                               QTableWidget, QTableWidgetItem, QHeaderView,
                               QLineEdit, QMessageBox, QProgressDialog,
-                              QSlider, QCheckBox, QGroupBox)
+                              QSlider, QCheckBox, QGroupBox, QGridLayout)
 from PySide6.QtCore import Qt, Signal, Slot, QSettings, QObject, QThread
 
 from src.storage.models import TestCase, TestSet
@@ -204,7 +204,7 @@ class SyntheticExampleGeneratorWidget(QWidget):
         self.settings = settings
         self.setup_ui()
         
-    def setup_ui(self):
+    def setup_ui(self):        
         layout = QVBoxLayout(self)
         
         # Task Description
@@ -227,47 +227,75 @@ class SyntheticExampleGeneratorWidget(QWidget):
         
         # Parameters Group
         params_group = QGroupBox("Generation Parameters")
+        # Adjust font size to match other labels
+        font = params_group.font()
+        font.setPointSize(font.pointSize())  # Keep same point size but ensure consistent styling
+        params_group.setFont(font)
         params_layout = QVBoxLayout(params_group)
         
         # Number of examples
         num_examples_layout = QHBoxLayout()
-        num_examples_layout.addWidget(QLabel("Number of Examples:"))
+        num_examples_label = QLabel("Number of Examples:")
+        num_examples_label.setMinimumWidth(120)  # Fixed width for alignment
+        num_examples_layout.addWidget(num_examples_label)
         self.num_examples_spin = QSpinBox()
         self.num_examples_spin.setRange(1, 20)
         self.num_examples_spin.setValue(5)
+        self.num_examples_spin.setMinimumWidth(60)  # Increase width for two-digit numbers
         num_examples_layout.addWidget(self.num_examples_spin)
+        num_examples_layout.addStretch(1)  # Push content to the left
         params_layout.addLayout(num_examples_layout)
         
         # Diversity Level
-        diversity_layout = QHBoxLayout()
-        diversity_layout.addWidget(QLabel("Diversity Level:"))
+        diversity_layout = QGridLayout()
+        diversity_label = QLabel("Diversity Level:")
+        diversity_label.setMinimumWidth(120)  # Fixed width for alignment
+        diversity_layout.addWidget(diversity_label, 0, 0)
+        
         self.diversity_slider = QSlider(Qt.Horizontal)
         self.diversity_slider.setRange(1, 10)
         self.diversity_slider.setValue(7)  # Default 0.7
+        self.diversity_slider.setFixedWidth(300)  # Fixed width for slider
+        
         self.diversity_value_label = QLabel("7/10")
+        self.diversity_value_label.setMinimumWidth(40)  # Fixed width for value label
+        
         self.diversity_slider.valueChanged.connect(lambda v: self.diversity_value_label.setText(f"{v}/10"))
-        diversity_layout.addWidget(self.diversity_slider)
-        diversity_layout.addWidget(self.diversity_value_label)
+        
+        diversity_layout.addWidget(self.diversity_slider, 0, 1)
+        diversity_layout.addWidget(self.diversity_value_label, 0, 2)
+        diversity_layout.setColumnStretch(3, 1)  # Add stretch in the last column
         params_layout.addLayout(diversity_layout)
         
         # Complexity Level
-        complexity_layout = QHBoxLayout()
-        complexity_layout.addWidget(QLabel("Complexity Level:"))
+        complexity_layout = QGridLayout()
+        complexity_label = QLabel("Complexity Level:")
+        complexity_label.setMinimumWidth(120)  # Fixed width for alignment
+        complexity_layout.addWidget(complexity_label, 0, 0)
+        
         self.complexity_slider = QSlider(Qt.Horizontal)
         self.complexity_slider.setRange(1, 10)
         self.complexity_slider.setValue(5)  # Default 0.5
+        self.complexity_slider.setFixedWidth(300)  # Fixed width for slider
+        
         self.complexity_value_label = QLabel("5/10")
+        self.complexity_value_label.setMinimumWidth(40)  # Fixed width for value label
+        
         self.complexity_slider.valueChanged.connect(lambda v: self.complexity_value_label.setText(f"{v}/10"))
-        complexity_layout.addWidget(self.complexity_slider)
-        complexity_layout.addWidget(self.complexity_value_label)
+        
+        complexity_layout.addWidget(self.complexity_slider, 0, 1)
+        complexity_layout.addWidget(self.complexity_value_label, 0, 2)
+        complexity_layout.setColumnStretch(3, 1)  # Add stretch in the last column
         params_layout.addLayout(complexity_layout)
         
-        layout.addWidget(params_group)
+        # Model Selection (moved into Generation Parameters section)
+        model_layout = QGridLayout()
+        model_label = QLabel("Model:")
+        model_label.setMinimumWidth(120)  # Fixed width for alignment
+        model_layout.addWidget(model_label, 0, 0)
         
-        # Model Selection
-        model_layout = QHBoxLayout()
-        model_layout.addWidget(QLabel("Model:"))
         self.model_combo = QComboBox()
+        self.model_combo.setMinimumWidth(300)  # Match width of sliders
         
         # Populate with models from LLMWorker.get_models()
         available_models = LLMWorker.get_models()
@@ -287,8 +315,11 @@ class SyntheticExampleGeneratorWidget(QWidget):
             lambda text: self.settings.setValue("selected_model", text)
         )
         
-        model_layout.addWidget(self.model_combo)
-        layout.addLayout(model_layout)
+        model_layout.addWidget(self.model_combo, 0, 1)
+        model_layout.setColumnStretch(3, 1)  # Add stretch in the last column
+        params_layout.addLayout(model_layout)
+        
+        layout.addWidget(params_group)
         
         # Generated Examples Table
         self.examples_table = QTableWidget()

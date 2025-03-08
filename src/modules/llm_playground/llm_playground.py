@@ -1,17 +1,13 @@
 import sys
 from pathlib import Path
-import logging
 import json
-import traceback
-import re
-from datetime import datetime
+import logging
 from typing import Optional, List, Dict, Any
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTextEdit, QComboBox, QLabel, QSplitter,
                               QFrame, QCheckBox, QSpinBox, QMessageBox,
-                              QProgressBar, QApplication, QTableWidget, 
-                              QTableWidgetItem, QHeaderView, QSizePolicy,
-                              QProgressDialog, QDialog)
+                              QTableWidget, QTableWidgetItem, QHeaderView, 
+                              QSizePolicy, QProgressDialog, QDialog)
 from PySide6.QtCore import Qt, Signal, Slot, QThread, QSettings
 from PySide6.QtGui import QTextCursor, QColor
 

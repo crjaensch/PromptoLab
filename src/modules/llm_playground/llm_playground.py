@@ -174,15 +174,11 @@ class LLMPlaygroundWidget(QWidget):
         save_button_layout.addWidget(self.save_as_prompt_button)
         playground_main_layout.addLayout(save_button_layout)
 
-        playground_layout.addWidget(playground_main, 75)  # Give main area 75% of the width
+        # Add main playground area to the horizontal layout
+        playground_layout.addWidget(playground_main)
         
         # Parameters panel as collapsible (now on the right)
         self.params_panel = CollapsiblePanel("Parameters")
-        self.params_panel.expanded = False  # Closed by default
-        
-        # Set the width of the parameters panel to be 25% of the screen width
-        self.params_panel.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
-        self.params_panel.setMaximumWidth(300)  # Maximum width in pixels
         
         # Parameters section
         params_content_layout = QVBoxLayout()
@@ -283,16 +279,30 @@ class LLMPlaygroundWidget(QWidget):
         
         # Group Improve Prompt button with Pattern selector in a horizontal layout
         improve_controls = QHBoxLayout()
-        improve_controls.setSpacing(10)
+        improve_controls.setSpacing(0)  # No default spacing in the layout
         
-        # Improve Prompt button (plain button, no custom styling)
+        # Improve Prompt button with consistent styling
         improve_btn = QPushButton("Improve Prompt")
+        improve_btn.setMinimumHeight(30)  # Match height with other buttons
+        improve_btn.setFixedWidth(120)  # Fixed width for consistent appearance
         improve_btn.clicked.connect(self.improve_prompt)
         improve_controls.addWidget(improve_btn)
         
+        # Add extra spacing between button and pattern selector
+        improve_controls.addSpacing(15)
+        
+        # Create a dedicated widget to group the pattern label and combo
+        pattern_widget = QWidget()
+        pattern_layout = QHBoxLayout(pattern_widget)
+        
+        # Remove all margins from the layout
+        pattern_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Set the spacing to absolute minimum
+        pattern_layout.setSpacing(0)
+        
         # Pattern selector
         pattern_label = QLabel("Pattern:")
-        improve_controls.addWidget(pattern_label)
         
         self.pattern_combo = QComboBox()
         self.pattern_combo.addItems(["TAG", "PIC", "LIFE"])
@@ -302,18 +312,27 @@ class LLMPlaygroundWidget(QWidget):
         self.pattern_combo.setItemData(0, "Task-Action-Guideline pattern", Qt.ToolTipRole)
         self.pattern_combo.setItemData(1, "Persona-Instruction-Context pattern", Qt.ToolTipRole)
         self.pattern_combo.setItemData(2, "Learn-Improvise-Feedback-Evaluate pattern", Qt.ToolTipRole)
-        improve_controls.addWidget(self.pattern_combo)
+        
+        pattern_layout.addWidget(pattern_label)
+        pattern_layout.addWidget(self.pattern_combo)
+        
+        # Add the grouped widget to the main layout
+        improve_controls.addWidget(pattern_widget)
         
         params_content_layout.addLayout(improve_controls)
-        params_content_layout.addSpacing(10)  # Add spacing between options
+        params_content_layout.addSpacing(5)  # Add spacing between options
         
         # 2. Critique & Refine section (regular font)
         critique_label = QLabel("2. Critique and Refine Prompt")
         params_content_layout.addWidget(critique_label)
         
-        # Critique & Refine button (plain button, no custom styling)
+        # Critique & Refine button with consistent styling
         critique_controls = QHBoxLayout()
+        critique_controls.setSpacing(0)  # No default spacing
+        
         critique_refine_btn = QPushButton("Refine Prompt")
+        critique_refine_btn.setMinimumHeight(30)  # Match height with other buttons
+        critique_refine_btn.setFixedWidth(120)  # Fixed width for consistent appearance
         critique_refine_btn.setToolTip("Iteratively optimize prompt using critique and refinement")
         critique_refine_btn.clicked.connect(self.critique_and_refine_prompt)
         critique_controls.addWidget(critique_refine_btn)
@@ -322,7 +341,11 @@ class LLMPlaygroundWidget(QWidget):
         params_content_layout.addLayout(critique_controls)
         
         self.params_panel.content_layout.addLayout(params_content_layout)
-        playground_layout.addWidget(self.params_panel, 25)  # Give sidebar 25% of the width
+        playground_layout.addWidget(self.params_panel)
+        
+        # Set stretch factors to allow proper collapsing
+        playground_layout.setStretch(0, 1)  # Main area can stretch
+        playground_layout.setStretch(1, 0)  # Collapsible panel doesn't stretch
         playground_layout.setSpacing(16)  # Consistent spacing
         
         layout.addLayout(playground_layout)
@@ -340,8 +363,13 @@ class LLMPlaygroundWidget(QWidget):
         self.settings.setValue("variables", json.dumps(self.current_variables))
 
     def load_state(self):
-        params_expanded = self.settings.value("params_panel_expanded", False, bool)  
-        self.params_panel.expanded = params_expanded
+        # Default to expanded (true) for the parameters panel
+        params_expanded = self.settings.value("params_panel_expanded", True, bool)
+        
+        # If the saved state is not expanded, toggle the panel to collapse it
+        # This assumes the panel starts in expanded state (CollapsiblePanel default)
+        if not params_expanded:
+            self.params_panel.toggle_panel()
             
         # Restore LLM settings
         model = self.settings.value("selected_model", "gpt-4o-mini", str)

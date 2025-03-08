@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QFrame, QCheckBox, QSpinBox, QMessageBox,
                               QProgressBar, QApplication, QTableWidget, 
                               QTableWidgetItem, QHeaderView, QSizePolicy,
-                              QProgressDialog)
+                              QProgressDialog, QDialog)
 from PySide6.QtCore import Qt, Signal, Slot, QThread, QSettings
 from PySide6.QtGui import QTextCursor, QColor
 
@@ -28,6 +28,8 @@ from src.utils.collapsible_panel import CollapsiblePanel
 from src.llm.special_prompts import (get_TAG_pattern_improvement_prompt,
                              get_PIC_pattern_improvement_prompt,
                              get_LIFE_pattern_improvement_prompt)
+from src.modules.llm_playground.critique_n_refine import CritiqueNRefineWorker
+from src.modules.llm_playground.critique_config_dialog import CritiqueRefineConfigDialog
 
 class LLMPlaygroundWidget(QWidget):
     def __init__(self, settings, parent=None):
@@ -117,35 +119,14 @@ class LLMPlaygroundWidget(QWidget):
         input_layout.setContentsMargins(0, 0, 0, 0)
         input_layout.addWidget(self.user_prompt)
         
-        # Run and Improve Prompt buttons
+        # Submit Prompt button (primary action)
         button_layout = QHBoxLayout()
         button_layout.addStretch()
-        
-        # Submit Prompt button on the left
         submit_btn = QPushButton("Submit Prompt")
+        submit_btn.setMinimumHeight(30)  # Make button slightly taller but not too much
+        # No custom styling - using default button style
         submit_btn.clicked.connect(self.submit_prompt)
         button_layout.addWidget(submit_btn)
-        
-        # Add significant space between Submit Prompt and Improve Prompt section
-        button_layout.addStretch(3)  # More stretch weight for bigger gap
-        
-        # Group Improve Prompt button with Pattern selector
-        improve_btn = QPushButton("Improve Prompt")
-        improve_btn.clicked.connect(self.improve_prompt)
-        pattern_label = QLabel("Prompt Pattern:")
-        self.pattern_combo = QComboBox()
-        self.pattern_combo.addItems(["TAG", "PIC", "LIFE"])
-        self.pattern_combo.setCurrentText("TAG")
-        
-        # Add tooltips for each pattern
-        self.pattern_combo.setItemData(0, "Task-Action-Guideline pattern", Qt.ToolTipRole)
-        self.pattern_combo.setItemData(1, "Persona-Instruction-Context pattern", Qt.ToolTipRole)
-        self.pattern_combo.setItemData(2, "Learn-Improvise-Feedback-Evaluate pattern", Qt.ToolTipRole)
-        
-        button_layout.addWidget(improve_btn)
-        button_layout.addWidget(pattern_label)
-        button_layout.addWidget(self.pattern_combo)
-        
         button_layout.addStretch()
         input_layout.addLayout(button_layout)
         
@@ -193,11 +174,15 @@ class LLMPlaygroundWidget(QWidget):
         save_button_layout.addWidget(self.save_as_prompt_button)
         playground_main_layout.addLayout(save_button_layout)
 
-        playground_layout.addWidget(playground_main)
+        playground_layout.addWidget(playground_main, 75)  # Give main area 75% of the width
         
         # Parameters panel as collapsible (now on the right)
         self.params_panel = CollapsiblePanel("Parameters")
         self.params_panel.expanded = False  # Closed by default
+        
+        # Set the width of the parameters panel to be 25% of the screen width
+        self.params_panel.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        self.params_panel.setMaximumWidth(300)  # Maximum width in pixels
         
         # Parameters section
         params_content_layout = QVBoxLayout()
@@ -281,8 +266,63 @@ class LLMPlaygroundWidget(QWidget):
         self.variables_table.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         params_content_layout.addWidget(self.variables_table)
         
+        # Add separator for Prompt Optimization section (same style as other separators)
+        opt_separator = QFrame()
+        opt_separator.setFrameShape(QFrame.HLine)
+        opt_separator.setFrameShadow(QFrame.Sunken)
+        params_content_layout.addWidget(opt_separator)
+        
+        # Prompt Optimization section label (regular font to match other sections)
+        opt_label = QLabel("Prompt Optimization Options:")
+        params_content_layout.addWidget(opt_label)
+        params_content_layout.addSpacing(5)  # Add 5px spacing, same as Variables section
+        
+        # 1. Improve Prompt section (regular font)
+        improve_label = QLabel("1. Improve Prompt using Pattern")
+        params_content_layout.addWidget(improve_label)
+        
+        # Group Improve Prompt button with Pattern selector in a horizontal layout
+        improve_controls = QHBoxLayout()
+        improve_controls.setSpacing(10)
+        
+        # Improve Prompt button (plain button, no custom styling)
+        improve_btn = QPushButton("Improve Prompt")
+        improve_btn.clicked.connect(self.improve_prompt)
+        improve_controls.addWidget(improve_btn)
+        
+        # Pattern selector
+        pattern_label = QLabel("Pattern:")
+        improve_controls.addWidget(pattern_label)
+        
+        self.pattern_combo = QComboBox()
+        self.pattern_combo.addItems(["TAG", "PIC", "LIFE"])
+        self.pattern_combo.setCurrentText("TAG")
+        
+        # Add tooltips for each pattern
+        self.pattern_combo.setItemData(0, "Task-Action-Guideline pattern", Qt.ToolTipRole)
+        self.pattern_combo.setItemData(1, "Persona-Instruction-Context pattern", Qt.ToolTipRole)
+        self.pattern_combo.setItemData(2, "Learn-Improvise-Feedback-Evaluate pattern", Qt.ToolTipRole)
+        improve_controls.addWidget(self.pattern_combo)
+        
+        params_content_layout.addLayout(improve_controls)
+        params_content_layout.addSpacing(10)  # Add spacing between options
+        
+        # 2. Critique & Refine section (regular font)
+        critique_label = QLabel("2. Critique and Refine Prompt")
+        params_content_layout.addWidget(critique_label)
+        
+        # Critique & Refine button (plain button, no custom styling)
+        critique_controls = QHBoxLayout()
+        critique_refine_btn = QPushButton("Refine Prompt")
+        critique_refine_btn.setToolTip("Iteratively optimize prompt using critique and refinement")
+        critique_refine_btn.clicked.connect(self.critique_and_refine_prompt)
+        critique_controls.addWidget(critique_refine_btn)
+        critique_controls.addStretch()
+        
+        params_content_layout.addLayout(critique_controls)
+        
         self.params_panel.content_layout.addLayout(params_content_layout)
-        playground_layout.addWidget(self.params_panel)
+        playground_layout.addWidget(self.params_panel, 25)  # Give sidebar 25% of the width
         playground_layout.setSpacing(16)  # Consistent spacing
         
         layout.addLayout(playground_layout)
@@ -713,3 +753,114 @@ class LLMPlaygroundWidget(QWidget):
             self.model_combo.addItems(models)
         except Exception as e:
             self.show_status(f"Error loading models: {str(e)}", 5000)
+            
+    @Slot()
+    def critique_and_refine_prompt(self):
+        """Handle critique and refine button click."""
+        model = self.model_combo.currentText()
+        user_prompt = self.user_prompt.toPlainText()
+        
+        # Check if there's any prompt content to work with
+        if not user_prompt.strip():
+            # If no prompt content, show a more helpful message
+            self.playground_output.setPlainText("No prompt content found. Please load a prompt from the Prompt Catalog or enter a prompt to optimize.")
+            self.save_as_prompt_button.setEnabled(False)
+            self.show_status("No prompt content found", 5000)
+            return
+            
+        try:
+            # Configure the critique and refine process
+            dialog = CritiqueRefineConfigDialog(self)
+            if dialog.exec() != QDialog.Accepted:
+                return
+                
+            iterations = dialog.get_iterations()
+            
+            # Combine system and user prompts if system prompt exists and is visible
+            overall_prompt = f"<original_prompt>\n User: {user_prompt}\n</original_prompt>"
+            if self.system_prompt_checkbox.isChecked() and self.system_prompt.isVisible():
+                system_prompt = self.system_prompt.toPlainText()
+                if system_prompt.strip():
+                    overall_prompt = f"<original_prompt>\nSystem: {system_prompt}\n\nUser: {user_prompt}\n</original_prompt>"
+            
+            # Show progress dialog and status
+            self.progress_dialog = QProgressDialog("Optimizing prompt...", "Cancel", 0, 0, self)
+            self.progress_dialog.setWindowModality(Qt.WindowModal)
+            self.progress_dialog.setMinimumDuration(400)  # Show after 400ms to avoid flashing for quick responses
+            self.show_status(f"Working on optimizing your prompt using Critique & Refine method...", 0)  # Show until completion
+            
+            # Get model parameters
+            model_params = {}
+            if self.max_tokens_combo.currentText():
+                model_params['max_tokens'] = int(self.max_tokens_combo.currentText())
+            if self.temperature_combo.currentText():
+                model_params['temperature'] = float(self.temperature_combo.currentText())
+            if self.top_p_combo.currentText():
+                model_params['top_p'] = float(self.top_p_combo.currentText())
+            
+            # Create worker thread and worker
+            self.worker_thread = QThread()
+            self.worker = CritiqueNRefineWorker(
+                model_name=model,
+                user_prompt=overall_prompt,
+                system_prompt=None,  # System prompt is included in the overall prompt
+                iterations=iterations,
+                model_params=model_params
+            )
+            self.worker.moveToThread(self.worker_thread)
+            
+            # Connect signals
+            self.worker_thread.started.connect(self.worker.run)
+            self.worker.finished.connect(self.on_critique_refine_finished)
+            self.worker.error.connect(self.on_critique_refine_error)
+            self.worker.cancelled.connect(self.on_critique_refine_cancelled)
+            self.worker.progress.connect(self.on_critique_refine_progress)
+            
+            # Handle cancellation
+            self.progress_dialog.canceled.connect(self.on_cancel_clicked)
+            
+            # Start the thread
+            self.worker_thread.start()
+            
+        except Exception as e:
+            self.playground_output.setPlainText(f"Error optimizing prompt: {str(e)}")
+            self.save_as_prompt_button.setEnabled(False)  # Disable button on error
+            self.show_status(f"Error optimizing prompt: {str(e)}", 7000)
+            
+    @Slot(str)
+    def on_critique_refine_finished(self, result: str):
+        """Called when the critique and refine process finishes without cancellation."""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        self.playground_output.setMarkdown(result)
+        self.save_as_prompt_button.setEnabled(True)
+        self.show_status("Prompt optimization completed!", 5000)
+        self.cleanup()
+
+    @Slot(str)
+    def on_critique_refine_error(self, error_msg: str):
+        """Called if an exception occurs in the CritiqueNRefineWorker."""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        self.playground_output.setPlainText(f"Error optimizing prompt: {error_msg}")
+        self.save_as_prompt_button.setEnabled(False)
+        self.show_status(f"Error optimizing prompt: {error_msg}", 7000)
+        self.cleanup()
+
+    @Slot()
+    def on_critique_refine_cancelled(self):
+        """Called if the critique and refine task was cancelled via user's request."""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+        self.playground_output.setPlainText("Prompt optimization was cancelled by the user.")
+        self.show_status("Prompt optimization cancelled", 5000)
+        self.cleanup()
+        
+    @Slot(str)
+    def on_critique_refine_progress(self, message: str):
+        """Update progress dialog with current status."""
+        if self.progress_dialog:
+            self.progress_dialog.setLabelText(message)
+            
+
+

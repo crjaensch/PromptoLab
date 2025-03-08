@@ -112,6 +112,8 @@ Here's a quick visual overview of PromptoLab's main features:
 ![Interactive LLM Playground for prompt development](images/LLM-Playground-Screen_Improve-Prompt.png)
 
 ### LLM Playground - Critique and Refine
+![Interactive LLM Playground for prompt development](images/LLM-Playground-Screen_Refine-Prompt-Input.png)
+
 The Critique and Refine method is a powerful new feature that iteratively improves your prompts through AI-powered analysis and refinement. This approach helps you create more effective prompts by:
 
 1. **Analyzing** the current prompt for strengths and weaknesses
@@ -120,10 +122,13 @@ The Critique and Refine method is a powerful new feature that iteratively improv
 
 You can configure the number of refinement iterations (1-5) to control how thoroughly the prompt is optimized. More iterations generally produce better results but take longer to process. This feature is particularly useful for complex prompts that need careful tuning to achieve optimal performance.
 
+![Interactive LLM Playground for prompt development](images/LLM-Playground-Screen_Refine-Prompt-Output.png)
+
 ### Test Set Manager
 ![Test Set Manager for systematic prompt test set definition](images/TestSet-Manager-Screen.png)
 
-### Synthetic Example Generator
+### Test Set Manager - Synthetic Example Generator
+
 The Synthetic Example Generator is a powerful new feature that helps you automatically create diverse test cases for your prompts using LLM models. This tool saves you time and effort by generating high-quality examples based on your task description.
 
 **Key capabilities:**
@@ -132,9 +137,10 @@ The Synthetic Example Generator is a powerful new feature that helps you automat
 - Adjust diversity level to control how varied the examples should be
 - Set complexity level to determine how challenging the examples should be
 - Select from multiple LLM models to power the generation process
-- Seamlessly add generated examples to your test sets
 
-Access this feature directly from the Test Set Manager by clicking the "Generate Synthetic Examples" button. The generated examples include both user inputs and expected outputs, ready to be used in your prompt testing workflow.
+Access this feature from the Test Set Manager by clicking the "Generate Synthetic Examples" button. The generated examples include both user inputs and expected outputs, ready to be used in your prompt testing workflow.
+
+![Synthetic Example Generator for automatic prompt testing](images/TestSet-Manager-Generate-Examples.png)
 
 ### Eval Playground
 ![Evaluation Playground for assessing prompt performance](images/Eval-Playground-Screen.png)

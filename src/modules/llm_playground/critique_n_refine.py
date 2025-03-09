@@ -1,6 +1,6 @@
 import re
 import logging
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional
 from pathlib import Path
 import sys
 from PySide6.QtCore import Signal, Slot, QObject
@@ -35,6 +35,10 @@ class CritiqueNRefineWorker(QObject):
         self.model_params = model_params or {}
         self.cancelled_flag = False
         
+        # Store references to workers to prevent premature garbage collection
+        self.critique_worker = None
+        self.refine_worker = None
+        
     def cancel(self):
         """Request cancellation of the running task."""
         self.cancelled_flag = True
@@ -43,39 +47,71 @@ class CritiqueNRefineWorker(QObject):
     def run(self):
         """Execute the critique and refine process."""
         try:
-            current_prompt = self.user_prompt
-            system_prompt = self.system_prompt
+            self.current_prompt = self.user_prompt
+            self.system_prompt = self.system_prompt
             
             # Extract the actual prompt content if wrapped in tags
-            prompt_content = self._extract_prompt_content(current_prompt)
+            self.prompt_content = self._extract_prompt_content(self.current_prompt)
+            self.current_iteration = 0
+            self.critique = None
             
-            for i in range(self.iterations):
-                if self.cancelled_flag:
-                    self.cancelled.emit()
-                    return
-                    
-                # Step 1: Generate critique
-                self.progress.emit(f"Iteration {i+1}/{self.iterations}: Generating critique...")
-                critique = self._generate_critique(prompt_content)
-                
-                if self.cancelled_flag:
-                    self.cancelled.emit()
-                    return
-                    
-                # Step 2: Refine the prompt based on critique
-                self.progress.emit(f"Iteration {i+1}/{self.iterations}: Refining prompt...")
-                refined_prompt = self._refine_prompt(prompt_content, critique)
-                
-                # Update for next iteration
-                prompt_content = refined_prompt
-            
-            # Format the final result with the critique and refinement process
-            result = self._format_result(prompt_content, critique)
-            self.finished.emit(result)
+            # Start the first iteration
+            self._start_next_iteration()
             
         except Exception as e:
             logging.error(f"Error in critique and refine process: {str(e)}")
             self.error.emit(f"Error in critique and refine process: {str(e)}")
+    
+    def _start_next_iteration(self):
+        """Start the next iteration of the critique and refine process."""
+        if self.cancelled_flag:
+            self.cancelled.emit()
+            return
+            
+        if self.current_iteration >= self.iterations:
+            # All iterations completed, format and emit the result
+            result = self._format_result(self.prompt_content, self.critique)
+            self.finished.emit(result)
+            return
+            
+        # Start the critique step
+        self.progress.emit(f"Iteration {self.current_iteration+1}/{self.iterations}: Generating critique...")
+        self._start_critique()
+    
+    def _start_critique(self):
+        """Start the critique step."""
+        critique_system_prompt = (
+            "You are an expert prompt engineer tasked with analyzing and critiquing prompts. "
+            "Your goal is to identify strengths and weaknesses in the prompt and suggest specific improvements. "
+            "Focus on clarity, specificity, structure, and potential ambiguities."
+        )
+        
+        critique_user_prompt = (
+            "Please analyze and critique the following prompt. Identify its strengths and weaknesses, "
+            "focusing on clarity, specificity, structure, and potential ambiguities. "
+            "Provide specific suggestions for improvement.\n\n"
+            f"PROMPT TO CRITIQUE:\n{self.prompt_content}\n\n"
+            "Your critique should cover:\n"
+            "1. Overall assessment\n"
+            "2. Specific strengths\n"
+            "3. Areas for improvement\n"
+            "4. Specific suggestions for enhancement"
+        )
+        
+        # Create worker using the new LLMWorker implementation
+        self.critique_worker = LLMWorker(
+            model_name=self.model_name,
+            user_prompt=critique_user_prompt,
+            system_prompt=critique_system_prompt,
+            model_params=self.model_params
+        )
+        
+        # Connect signals
+        self.critique_worker.finished.connect(self._on_critique_finished)
+        self.critique_worker.error.connect(self._on_critique_error)
+        
+        # Run the worker
+        self.critique_worker.run()
     
     def _extract_prompt_content(self, prompt: str) -> str:
         """Extract the actual prompt content from the input.
@@ -92,58 +128,25 @@ class CritiqueNRefineWorker(QObject):
         
         return prompt
     
-    def _generate_critique(self, prompt: str) -> str:
-        """Generate a critique of the current prompt."""
-        critique_system_prompt = (
-            "You are an expert prompt engineer tasked with analyzing and critiquing prompts. "
-            "Your goal is to identify strengths and weaknesses in the prompt and suggest specific improvements. "
-            "Focus on clarity, specificity, structure, and potential ambiguities."
-        )
-        
-        critique_user_prompt = (
-            "Please analyze and critique the following prompt. Identify its strengths and weaknesses, "
-            "focusing on clarity, specificity, structure, and potential ambiguities. "
-            "Provide specific suggestions for improvement.\n\n"
-            f"PROMPT TO CRITIQUE:\n{prompt}\n\n"
-            "Your critique should cover:\n"
-            "1. Overall assessment\n"
-            "2. Specific strengths\n"
-            "3. Areas for improvement\n"
-            "4. Specific suggestions for enhancement"
-        )
-        
-        # Run LLM to generate critique
-        worker = LLMWorker(
-            model_name=self.model_name,
-            user_prompt=critique_user_prompt,
-            system_prompt=critique_system_prompt,
-            model_params=self.model_params
-        )
-        
-        # Since we're in a worker thread already, we can call run directly
-        # but we need to capture the result
-        result = None
-        error = None
-        
-        def on_finished(res):
-            nonlocal result
-            result = res
+    def _on_critique_finished(self, critique):
+        """Handle the completion of the critique step."""
+        if self.cancelled_flag:
+            self.cancelled.emit()
+            return
             
-        def on_error(err):
-            nonlocal error
-            error = err
-            
-        worker.finished.connect(on_finished)
-        worker.error.connect(on_error)
-        worker.run()
+        # Store the critique for later use
+        self.critique = critique
         
-        if error:
-            raise Exception(f"Error generating critique: {error}")
-            
-        return result
+        # Start the refine step
+        self.progress.emit(f"Iteration {self.current_iteration+1}/{self.iterations}: Refining prompt...")
+        self._start_refine()
     
-    def _refine_prompt(self, original_prompt: str, critique: str) -> str:
-        """Refine the prompt based on the critique."""
+    def _on_critique_error(self, error_msg):
+        """Handle errors in the critique step."""
+        self.error.emit(f"Error generating critique: {error_msg}")
+    
+    def _start_refine(self):
+        """Start the refine step."""
         refine_system_prompt = (
             "You are an expert prompt engineer tasked with refining and improving prompts "
             "based on critique and analysis. Your goal is to create a clearer, more effective prompt "
@@ -153,40 +156,48 @@ class CritiqueNRefineWorker(QObject):
         refine_user_prompt = (
             "Based on the critique provided, please refine and improve the original prompt. "
             "Create a new version that addresses the weaknesses identified while maintaining the original intent.\n\n"
-            f"ORIGINAL PROMPT:\n{original_prompt}\n\n"
-            f"CRITIQUE:\n{critique}\n\n"
+            f"ORIGINAL PROMPT:\n{self.prompt_content}\n\n"
+            f"CRITIQUE:\n{self.critique}\n\n"
             "Please provide only the refined prompt without any additional explanations or commentary."
         )
         
-        # Run LLM to refine prompt
-        worker = LLMWorker(
+        # Create worker using the new LLMWorker implementation
+        self.refine_worker = LLMWorker(
             model_name=self.model_name,
             user_prompt=refine_user_prompt,
             system_prompt=refine_system_prompt,
             model_params=self.model_params
         )
         
-        # Since we're in a worker thread already, we can call run directly
-        # but we need to capture the result
-        result = None
-        error = None
+        # Connect signals
+        self.refine_worker.finished.connect(self._on_refine_finished)
+        self.refine_worker.error.connect(self._on_refine_error)
         
-        def on_finished(res):
-            nonlocal result
-            result = res
+        # Run the worker
+        self.refine_worker.run()
+    
+    def _on_refine_finished(self, refined_prompt):
+        """Handle the completion of the refine step."""
+        if self.cancelled_flag:
+            self.cancelled.emit()
+            return
             
-        def on_error(err):
-            nonlocal error
-            error = err
-            
-        worker.finished.connect(on_finished)
-        worker.error.connect(on_error)
-        worker.run()
+        # Update the prompt content with the refined version
+        self.prompt_content = refined_prompt
         
-        if error:
-            raise Exception(f"Error refining prompt: {error}")
-            
-        return result
+        # Increment the iteration counter
+        self.current_iteration += 1
+        
+        # Start the next iteration
+        self._start_next_iteration()
+    
+    def _on_refine_error(self, error_msg):
+        """Handle errors in the refine step."""
+        self.error.emit(f"Error refining prompt: {error_msg}")
+    
+    def cancel(self):
+        """Cancel the critique and refine process."""
+        self.cancelled_flag = True
     
     def _format_result(self, refined_prompt: str, critique: str) -> str:
         """Format the final result with the critique and refinement process."""

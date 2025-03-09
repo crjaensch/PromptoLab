@@ -8,8 +8,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QFrame, QCheckBox, QSpinBox, QMessageBox,
                               QTableWidget, QTableWidgetItem, QHeaderView, 
                               QSizePolicy, QProgressDialog, QDialog)
-from PySide6.QtCore import Qt, Signal, Slot, QThread, QSettings
-from PySide6.QtGui import QTextCursor, QColor
+from PySide6.QtCore import Qt, Slot, QSettings
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent.parent.parent.parent)
@@ -44,7 +43,6 @@ class LLMPlaygroundWidget(QWidget):
         self.load_state()
         
         # Initialize worker-related variables
-        self.worker_thread = None
         self.worker = None
         self.progress_dialog = None
         
@@ -430,18 +428,15 @@ class LLMPlaygroundWidget(QWidget):
             self.progress_dialog.setMinimumDuration(400)  # Show after 400ms to avoid flashing for quick responses
             self.show_status("Running LLM request...", 0)  # Show until completion
             
-            # Create worker thread and worker
-            self.worker_thread = QThread()
+            # Create worker new worker
             self.worker = LLMWorker(
                 model_name=model,
                 user_prompt=processed_user_prompt,
                 system_prompt=processed_system_prompt,
                 model_params=model_params
             )
-            self.worker.moveToThread(self.worker_thread)
             
             # Connect signals
-            self.worker_thread.started.connect(self.worker.run)
             self.worker.finished.connect(self.on_llm_finished)
             self.worker.error.connect(self.on_llm_error)
             self.worker.cancelled.connect(self.on_llm_cancelled)
@@ -449,8 +444,8 @@ class LLMPlaygroundWidget(QWidget):
             # Handle cancellation
             self.progress_dialog.canceled.connect(self.on_cancel_clicked)
             
-            # Start the thread
-            self.worker_thread.start()
+            # Run the worker
+            self.worker.run()
             
         except Exception as e:
             self.playground_output.setPlainText(f"Error: {str(e)}")
@@ -493,7 +488,7 @@ class LLMPlaygroundWidget(QWidget):
             self.worker.cancel()
 
     def cleanup(self):
-        """Cleanup the thread and close the progress dialog."""
+        """Cleanup and close the progress dialog."""
         if self.progress_dialog:
             self.progress_dialog.reset()
             self.progress_dialog = None
@@ -501,21 +496,17 @@ class LLMPlaygroundWidget(QWidget):
         self.cleanup_worker()
 
     def cleanup_worker(self):
-        """Clean up worker thread and worker with proper error handling."""
-        if hasattr(self, 'worker_thread') and self.worker_thread is not None:
-            logging.debug(f"Cleaning up worker thread in LLMPlaygroundWidget")
-            self.worker_thread.quit()
-            if not self.worker_thread.wait(5000):  # 5s timeout
-                logging.warning("Worker thread did not exit in time, forcing termination")
-                self.worker_thread.terminate()
-                if not self.worker_thread.wait(1000):  # Give it one more second
-                    logging.error("Worker thread could not be terminated")
-            self.worker_thread = None
+        """Clean up worker with proper error handling."""
+        logging.debug(f"Cleaning up worker in LLMPlaygroundWidget")
+        # Cancel the worker if it exists
+        if self.worker is not None:
+            if hasattr(self.worker, 'cancel'):
+                self.worker.cancel()
             self.worker = None
 
     @Slot()
     def cleanup_threads(self):
-        """Clean up any running worker threads."""
+        """Clean up any running worker."""
         self.cleanup_worker()
 
     @Slot()
@@ -547,17 +538,14 @@ class LLMPlaygroundWidget(QWidget):
             self.progress_dialog.setMinimumDuration(400)  # Show after 400ms to avoid flashing for quick responses
             self.show_status(f"Working on improving your prompt using {pattern} pattern...", 0)  # Show until completion
             
-            # Create worker thread and worker
-            self.worker_thread = QThread()
+            # Create LLM worker
             self.worker = LLMWorker(
                 model_name=model,
                 user_prompt=overall_prompt,
                 system_prompt=pattern_prompt
             )
-            self.worker.moveToThread(self.worker_thread)
             
             # Connect signals
-            self.worker_thread.started.connect(self.worker.run)
             self.worker.finished.connect(self.on_improve_finished)
             self.worker.error.connect(self.on_improve_error)
             self.worker.cancelled.connect(self.on_improve_cancelled)
@@ -565,8 +553,8 @@ class LLMPlaygroundWidget(QWidget):
             # Handle cancellation
             self.progress_dialog.canceled.connect(self.on_cancel_clicked)
             
-            # Start the thread
-            self.worker_thread.start()
+            # Run the worker
+            self.worker.run()
             
         except Exception as e:
             self.playground_output.setPlainText(f"Error improving prompt: {str(e)}")
@@ -822,8 +810,7 @@ class LLMPlaygroundWidget(QWidget):
             if self.top_p_combo.currentText():
                 model_params['top_p'] = float(self.top_p_combo.currentText())
             
-            # Create worker thread and worker
-            self.worker_thread = QThread()
+            # Create Critique & Refine worker
             self.worker = CritiqueNRefineWorker(
                 model_name=model,
                 user_prompt=overall_prompt,
@@ -831,10 +818,8 @@ class LLMPlaygroundWidget(QWidget):
                 iterations=iterations,
                 model_params=model_params
             )
-            self.worker.moveToThread(self.worker_thread)
             
             # Connect signals
-            self.worker_thread.started.connect(self.worker.run)
             self.worker.finished.connect(self.on_critique_refine_finished)
             self.worker.error.connect(self.on_critique_refine_error)
             self.worker.cancelled.connect(self.on_critique_refine_cancelled)
@@ -843,8 +828,8 @@ class LLMPlaygroundWidget(QWidget):
             # Handle cancellation
             self.progress_dialog.canceled.connect(self.on_cancel_clicked)
             
-            # Start the thread
-            self.worker_thread.start()
+            # Run the worker
+            self.worker.run()
             
         except Exception as e:
             self.playground_output.setPlainText(f"Error optimizing prompt: {str(e)}")

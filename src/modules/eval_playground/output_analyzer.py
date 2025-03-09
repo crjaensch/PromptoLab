@@ -1,15 +1,17 @@
 import logging
 logging.debug('output_analyzer module imported.')
 
+import sys
+import json
 from dataclasses import dataclass
 from pathlib import Path
-import sys
-import os
-from typing import Optional, Dict, List, Tuple, NamedTuple
+from typing import List
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-import json
-from PySide6.QtCore import QObject, Signal, QThread
+from PySide6.QtCore import QObject, Signal
+
+# Import thread management utilities
+from src.utils.thread_manager import ThreadManager
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent.parent.parent.parent)
@@ -57,7 +59,6 @@ class AsyncAnalyzer(QObject):
         self.current_embedding = None
         self.grade = None
         self.feedback = None
-        self.active_threads = []   # Keep track of active threads
         
     def start_analysis(self, input_text: str, baseline: str, current: str, model: str = "gpt-4o"):
         """Start the async analysis process."""
@@ -69,32 +70,25 @@ class AsyncAnalyzer(QObject):
         # Start getting embeddings
         self._get_embeddings_async()
         
-    def _create_embed_worker(self, text: str, on_finished) -> QThread:
-        """Create and setup a thread with an EmbedWorker.
+    def _create_embed_worker(self, text: str, on_finished):
+        """Create and setup an EmbedWorker using the thread pool.
         
         Args:
             text: The text to embed
             on_finished: Callback function to handle the embedding result
-            
-        Returns:
-            QThread ready to be started
         """
-        # Create worker in new thread
-        worker_thread = QThread()
+        # Create worker
         worker = EmbedWorker(text=text)
-        worker.moveToThread(worker_thread)
         
-        # Keep track of thread for cleanup
-        self.active_threads.append(worker_thread)
+        # Keep track of worker for cleanup
         self.pending_embeddings.append(worker)
 
         # Connect signals
         worker.finished.connect(on_finished)
         worker.error.connect(self.error.emit)
-        worker_thread.started.connect(worker.run)
-        worker_thread.finished.connect(worker_thread.deleteLater)
-
-        return worker_thread
+        
+        # Start the worker (which will use the thread pool internally)
+        worker.run()
         
     def _get_embeddings_async(self):
         """Get embeddings for both texts asynchronously."""
@@ -103,13 +97,13 @@ class AsyncAnalyzer(QObject):
             self._create_embed_worker(
                 self.baseline,
                 lambda result: self._handle_baseline_embedding(result)
-            ).start()
+            )
             
             # Start current embedding
             self._create_embed_worker(
                 self.current,
                 lambda result: self._handle_current_embedding(result)
-            ).start()
+            )
             
         except Exception as e:
             self.error.emit(f"Error starting embeddings: {str(e)}")
@@ -149,27 +143,22 @@ class AsyncAnalyzer(QObject):
         )
 
         try:
-            # Create worker in new thread
-            worker_thread = QThread()
+            # Create worker using the new LLMWorker implementation
             worker = LLMWorker(
                 model_name=self.model,
                 user_prompt=grader_user_prompt,
                 system_prompt=grader_system_prompt
             )
-            worker.moveToThread(worker_thread)
 
-            # Keep track of thread for cleanup
-            self.active_threads.append(worker_thread)
+            # Keep track of worker for cleanup
             self.current_runner = worker
 
             # Connect signals
             worker.finished.connect(lambda result: self._handle_grade_result(result, similarity))
             worker.error.connect(self.error.emit)
-            worker_thread.started.connect(worker.run)
-            worker_thread.finished.connect(worker_thread.deleteLater)
-          
-            # Start thread
-            worker_thread.start()
+            
+            # Start the worker (which will use the thread pool internally)
+            worker.run()
             
         except Exception as e:
             self.error.emit(f"Error getting LLM evaluation: {str(e)}")
@@ -263,20 +252,12 @@ class AsyncAnalyzer(QObject):
         if self.current_runner:
             self.current_runner.cancel()
         
-        # Clean up threads safely
-        logging.debug('Cleaning up threads.')
-        for thread in self.active_threads:
-            try:
-                # Use a more aggressive approach - terminate immediately
-                thread.terminate()
-                thread.wait(3000)  # Give it 3 seconds to terminate
-                logging.debug(f"Thread {thread} has been terminated.")
-            except Exception as e:
-                logging.error(f"Error during thread cleanup: {e}")
-        
-        self.active_threads.clear()
+        # Clear our references to workers
         self.pending_embeddings.clear()
         self.current_runner = None
+        
+        # Note: We don't need to manually clean up threads anymore
+        # as the ThreadManager handles thread lifecycle management
         
         logging.debug("AsyncAnalyzer.cleanup() completed.")
 

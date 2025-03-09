@@ -103,29 +103,36 @@ class MockRunner(QObject):
     
     def __init__(self):
         super().__init__()
-        self._thread = None
+        self._runnable = None
         self._should_succeed = True
+        self._cancelled = False
+        # Add a mock for the run method
+        self.run = MagicMock()
+        # Make run actually call our _run method when called
+        self.run.side_effect = self._run
+        # Add a mock for the cancel method
+        self.cancel = MagicMock()
+        # Make cancel actually call our _cancel method when called
+        self.cancel.side_effect = self._cancel
     
-    def moveToThread(self, thread):
-        """Mock moveToThread."""
-        self._thread = thread
-    
-    def run(self):
+    def _run(self):
         """Simulate the run method of LLMWorker."""
+        # In the real implementation, this would create a runnable and start it
+        # For testing, we'll just emit the signal directly if _should_succeed is True
         if self._should_succeed:
             self.finished.emit("Test response")
         
-    def cancel(self):
+    def _cancel(self):
         """Simulate the cancel method of LLMWorker."""
-        self.cancelled.emit()
+        # Only emit the signal if we haven't already cancelled to prevent recursion
+        if not self._cancelled:
+            self._cancelled = True
+            # We don't emit the cancelled signal in tests to prevent recursion
+            # self.cancelled.emit()
 
-@patch('src.modules.llm_playground.llm_playground.QThread')
 @patch('src.modules.llm_playground.llm_playground.LLMWorker')
-def test_submit_prompt(mock_llm_worker, mock_thread, playground_widget, qtbot):
+def test_submit_prompt(mock_llm_worker, playground_widget, qtbot):
     """Test running the playground with a basic prompt."""
-    # Set up mock thread
-    thread = mock_thread.return_value
-    
     # Set up mock worker
     mock_worker = MockRunner()
     mock_llm_worker.return_value = mock_worker
@@ -143,9 +150,8 @@ def test_submit_prompt(mock_llm_worker, mock_thread, playground_widget, qtbot):
     assert kwargs["system_prompt"] is None
     assert kwargs["model_name"] == "gpt-4o"
     
-    # Verify thread setup
-    assert mock_thread.called
-    assert thread.start.called
+    # Verify worker was run
+    assert mock_worker.run.called
     
     # Emit result
     mock_worker.finished.emit("Test response")
@@ -154,13 +160,9 @@ def test_submit_prompt(mock_llm_worker, mock_thread, playground_widget, qtbot):
     # Check output
     assert playground_widget.playground_output.toPlainText() == "Test response"
 
-@patch('src.modules.llm_playground.llm_playground.QThread')
 @patch('src.modules.llm_playground.llm_playground.LLMWorker')
-def test_submit_prompt_with_system_prompt(mock_llm_worker, mock_thread, playground_widget, qtbot):
+def test_submit_prompt_with_system_prompt(mock_llm_worker, playground_widget, qtbot):
     """Test running the playground with a system prompt."""
-    # Set up mock thread
-    thread = mock_thread.return_value
-    
     # Set up mock worker
     mock_worker = MockRunner()
     mock_llm_worker.return_value = mock_worker
@@ -180,9 +182,8 @@ def test_submit_prompt_with_system_prompt(mock_llm_worker, mock_thread, playgrou
     assert kwargs["system_prompt"] == "Test system prompt"
     assert kwargs["model_name"] == "gpt-4o"
     
-    # Verify thread setup
-    assert mock_thread.called
-    assert thread.start.called
+    # Verify worker was run
+    assert mock_worker.run.called
     
     # Emit result
     mock_worker.finished.emit("Test response")
@@ -191,13 +192,9 @@ def test_submit_prompt_with_system_prompt(mock_llm_worker, mock_thread, playgrou
     # Check output
     assert playground_widget.playground_output.toPlainText() == "Test response"
 
-@patch('src.modules.llm_playground.llm_playground.QThread')
 @patch('src.modules.llm_playground.llm_playground.LLMWorker')
-def test_improve_prompt(mock_llm_worker, mock_thread, playground_widget, qtbot):
+def test_improve_prompt(mock_llm_worker, playground_widget, qtbot):
     """Test the improve prompt functionality."""
-    # Set up mock thread
-    thread = mock_thread.return_value
-    
     # Set up mock worker
     mock_worker = MockRunner()
     mock_llm_worker.return_value = mock_worker
@@ -221,13 +218,11 @@ def test_improve_prompt(mock_llm_worker, mock_thread, playground_widget, qtbot):
     assert "task-action-guideline" in kwargs["system_prompt"].lower()
     assert kwargs["model_name"] == "gpt-4o"
     
-    # Verify thread setup
-    assert mock_thread.called
-    assert thread.start.called
+    # Verify worker was run
+    assert mock_worker.run.called
     
     # Test with system prompt
     mock_llm_worker.reset_mock()
-    mock_thread.reset_mock()
     playground_widget.system_prompt.setPlainText("Test system prompt")
     playground_widget.system_prompt_checkbox.setChecked(True)
     playground_widget.improve_prompt()
@@ -243,14 +238,12 @@ def test_improve_prompt(mock_llm_worker, mock_thread, playground_widget, qtbot):
         ("LIFE", "learn-improvise-feedback-evaluate")
     ]:
         mock_llm_worker.reset_mock()
-        mock_thread.reset_mock()
         playground_widget.pattern_combo.setCurrentText(pattern)
         playground_widget.improve_prompt()
         
         args, kwargs = mock_llm_worker.call_args
         assert expected_text in kwargs["system_prompt"].lower()
-        assert mock_thread.called
-        assert thread.start.called
+        assert mock_worker.run.called
     
     # Emit result and verify output
     mock_worker.finished.emit("Improved test prompt")
@@ -333,6 +326,7 @@ def test_save_as_new_prompt(playground_widget, qtbot):
     mock_runner = MockRunner()
     with patch('src.modules.llm_playground.llm_playground.LLMWorker', return_value=mock_runner):
         playground_widget.improve_prompt()
+        assert mock_runner.run.called
         mock_runner.finished.emit("Improved test response")
         qtbot.wait(100)
         
@@ -369,6 +363,9 @@ def test_progress_dialog(mock_progress_dialog, playground_widget, qtbot):
     mock_worker = MockRunner()
     with patch('src.modules.llm_playground.llm_playground.LLMWorker', return_value=mock_worker):
         playground_widget.submit_prompt()
+        
+        # Make sure run was called
+        assert mock_worker.run.called
         
         # Verify progress dialog creation
         mock_progress_dialog.assert_called_once_with(

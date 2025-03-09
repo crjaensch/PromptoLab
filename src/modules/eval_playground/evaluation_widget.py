@@ -4,15 +4,13 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Tuple
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                               QTextEdit, QComboBox, QLabel, QSplitter,
                               QTableWidget, QTableWidgetItem, QHeaderView,
                               QProgressBar, QMessageBox, QFileDialog,
                               QTabWidget, QScrollArea, QFrame, QCheckBox,
                               QSpinBox, QApplication)
-from PySide6.QtCore import Qt, Signal, Slot, QThread, QSettings, QSize, QMetaObject, Q_ARG
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, Signal, Slot, QSettings, QMetaObject, Q_ARG
 
 # Add the project root directory to Python path
 project_root = str(Path(__file__).parent.parent.parent.parent)
@@ -25,6 +23,7 @@ from src.llm.llm_utils_adapter import LLMWorker
 from src.utils.expandable_text import ExpandableTextWidget
 from src.modules.eval_playground.output_analyzer import OutputAnalyzer
 from src.modules.eval_playground.html_eval_report import HtmlEvalReport
+from src.utils.thread_manager import ThreadManager
 from src.config import config
 
 class EvaluationWidget(QWidget):
@@ -44,7 +43,6 @@ class EvaluationWidget(QWidget):
         self.current_analyzer = None
         self.pending_cases = []
         self.evaluation_results = []  # Store accumulated results
-        self.active_threads = []      # Keep track of active threads
         
         # Connect signals using queued connection for thread safety
         self.error_occurred.connect(self._show_error_dialog, Qt.ConnectionType.QueuedConnection)
@@ -82,24 +80,6 @@ class EvaluationWidget(QWidget):
         # Clean up current analyzer if it exists
         if hasattr(self, 'current_analyzer') and self.current_analyzer:
             logging.debug("Cleaning up current analyzer...")
-            self.current_analyzer.cleanup()
-            self.current_analyzer = None
-            
-        if hasattr(self, 'active_threads') and self.active_threads:
-            for thread in self.active_threads:
-                logging.debug(f"Attempting cleanup for thread {thread} (isRunning: {thread.isRunning()}).")
-                if thread.isRunning():
-                    # Don't try to disconnect all signals - this causes an error
-                    # Instead, just terminate the thread immediately during shutdown
-                    # This is more aggressive but prevents hanging on exit
-                    thread.terminate()
-                    thread.wait(3000)  # Give it 3 seconds to terminate
-                    logging.debug(f"Thread {thread} has been terminated.")
-            self.active_threads.clear()
-        logging.debug("Completed cleanup_threads().")
-        
-        # First cleanup the analyzer if it exists
-        if self.current_analyzer:
             self.current_analyzer.cleanup()
             self.current_analyzer = None
             
@@ -411,35 +391,24 @@ class EvaluationWidget(QWidget):
         """Process the next test case in the queue."""
         i, test_case = self.pending_cases.pop(0)
         
-        # Create worker in new thread
-        worker_thread = QThread()
+        # Create worker using the new LLMWorker implementation
         worker = LLMWorker(
             model_name=model,
             user_prompt=test_case.input_text,
             system_prompt=self.system_prompt_input.toPlainText().strip() or None
         )
-        worker.moveToThread(worker_thread)
-        
-        # Keep track of thread for cleanup
-        self.active_threads.append(worker_thread)
         
         # Connect signals
         worker.finished.connect(lambda result: self.handle_llm_result(result))
         worker.error.connect(lambda msg: self._handle_error("LLM Error", msg))
-        worker_thread.started.connect(worker.run)
-        
-        # Proper cleanup connections
-        worker.finished.connect(worker.deleteLater)
-        worker.error.connect(worker.deleteLater)
-        worker_thread.finished.connect(worker_thread.deleteLater)
         
         # Store current state
         self.current_llm_runner = worker
         self.current_row = i
         self.current_test_case = test_case
         
-        # Start thread
-        worker_thread.start()
+        # Start the worker (which will use the thread pool internally)
+        worker.run()
         
     def handle_llm_result(self, current_output):
         """Handle LLM result and start analysis."""

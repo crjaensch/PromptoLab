@@ -25,7 +25,6 @@ With PromptoLab, navigating the complexities of prompt design has never been mor
 
 ![PromptoLab Overview](images/PromptoLab-visual-overview.png)
 
-
 ## Prerequisites
 
 - Python 3.10 or higher
@@ -155,6 +154,10 @@ The project uses:
 - Simon Willison's `llm` tool for LLM interactions
 - BerriAI's `litellm` library
 - Python's built-in `venv` for environment management
+
+
+Want more in-depth technical information about PromptoLab? Visit [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/crjaensch/PromptoLab)
+
 
 ## License
 

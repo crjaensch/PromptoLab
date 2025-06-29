@@ -124,10 +124,29 @@ class AsyncAnalyzer(QObject):
         except Exception as e:
             self.error.emit(f"Error processing current embedding: {str(e)}")
             
+    def _validate_embedding(self, embedding: np.ndarray, name: str):
+        """Ensure the embedding contains only finite values.
+        Args:
+            embedding: The numpy embedding array.
+            name: A label used in potential error messages.
+        Raises:
+            SimilarityError: If non-finite values are detected.
+        """
+        if not np.isfinite(embedding).all():
+            raise SimilarityError(f"{name} embedding contains non-finite values (NaN or Inf).")
+
     def _check_completion(self):
         """Check if all async operations are complete and emit result."""
         if self.baseline_embedding is not None and self.current_embedding is not None:
-            # Calculate similarity
+            # Validate embeddings before computing similarity
+            try:
+                self._validate_embedding(self.baseline_embedding, "Baseline")
+                self._validate_embedding(self.current_embedding, "Current")
+            except SimilarityError as e:
+                self.error.emit(str(e))
+                return
+
+            # Calculate similarity only if embeddings are valid
             similarity = cosine_similarity(self.baseline_embedding, self.current_embedding)[0][0]
             
             # Start LLM grading

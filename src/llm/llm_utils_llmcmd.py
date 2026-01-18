@@ -171,17 +171,25 @@ def get_models() -> List[str]:
                               capture_output=True, 
                               text=True, 
                               check=True)
-        
-        models = []
+
+        models: list[str] = []
+        seen = set()
         for line in result.stdout.splitlines():
-            if ':' in line:  # Only process lines that have a colon
-                # Get the part after the first colon
-                model_part = line.split(':', 1)[1].strip()
-                # If there are aliases (indicated by parentheses), only take the part before them
-                if '(' in model_part:
-                    model_part = model_part.split('(')[0].strip()
+            line = line.strip()
+            if ':' not in line:
+                continue
+
+            # Take text after the first colon (category prefix removed)
+            model_part = line.split(':', 1)[1].strip()
+
+            # Drop alias section if present, keep only the base model (which may include '/')
+            if '(aliases:' in model_part:
+                model_part = model_part.split('(aliases:', 1)[0].strip()
+
+            if model_part and model_part not in seen:
+                seen.add(model_part)
                 models.append(model_part)
-                
+
         return models
     except subprocess.CalledProcessError as e:
         logger.error(f"Error running 'llm models': {e}")

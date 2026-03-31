@@ -27,7 +27,7 @@ With PromptoLab, navigating the complexities of prompt design has never been mor
 
 ## Prerequisites
 
-- Python 3.10 or higher
+- **Python Version**: Due to pinned dependencies (e.g., PySide6), PromptoLab currently requires **Python 3.12**. Newer Python versions are not supported at this time.
 - One of the following LLM backends:
   - [llm](https://github.com/simonw/llm) command-line tool
     ```bash

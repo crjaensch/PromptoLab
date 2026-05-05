@@ -35,7 +35,7 @@ def test_initial_state(playground_widget):
     assert playground_widget.playground_output.toPlainText() == ""
     
     # Check model selection
-    assert playground_widget.model_combo.currentText() == "gpt-4o"
+    assert playground_widget.model_combo.currentText() == "gpt-5.3"
     
     # Check parameter values
     assert playground_widget.max_tokens_combo.currentText() == ""
@@ -80,8 +80,8 @@ def test_set_prompt(qtbot, playground_widget):
 def test_parameter_changes(qtbot, playground_widget):
     """Test changing LLM parameters."""
     # Change model
-    playground_widget.model_combo.setCurrentText("gpt-4o-mini")
-    assert playground_widget.model_combo.currentText() == "gpt-4o-mini"
+    playground_widget.model_combo.setCurrentText("gpt-5-mini")
+    assert playground_widget.model_combo.currentText() == "gpt-5-mini"
     
     # Change max tokens
     playground_widget.max_tokens_combo.setCurrentText("1024")
@@ -148,7 +148,7 @@ def test_submit_prompt(mock_llm_worker, playground_widget, qtbot):
     args, kwargs = mock_llm_worker.call_args
     assert kwargs["user_prompt"] == "Test prompt"
     assert kwargs["system_prompt"] is None
-    assert kwargs["model_name"] == "gpt-4o"
+    assert kwargs["model_name"] == "gpt-5.3"
     
     # Verify worker was run
     assert mock_worker.run.called
@@ -180,7 +180,7 @@ def test_submit_prompt_with_system_prompt(mock_llm_worker, playground_widget, qt
     args, kwargs = mock_llm_worker.call_args
     assert kwargs["user_prompt"] == "Test prompt"
     assert kwargs["system_prompt"] == "Test system prompt"
-    assert kwargs["model_name"] == "gpt-4o"
+    assert kwargs["model_name"] == "gpt-5.3"
     
     # Verify worker was run
     assert mock_worker.run.called
@@ -216,7 +216,7 @@ def test_improve_prompt(mock_llm_worker, playground_widget, qtbot):
     
     # Verify system prompt (pattern)
     assert "task-action-guideline" in kwargs["system_prompt"].lower()
-    assert kwargs["model_name"] == "gpt-4o"
+    assert kwargs["model_name"] == "gpt-5.3"
     
     # Verify worker was run
     assert mock_worker.run.called
@@ -271,7 +271,7 @@ def test_error_handling(qtbot, playground_widget):
 def test_save_load_state(qtbot, playground_widget, settings):
     """Test saving and loading widget state."""
     # Set up some state
-    playground_widget.model_combo.setCurrentText("gpt-4o-mini")
+    playground_widget.model_combo.setCurrentText("gpt-5-mini")
     playground_widget.max_tokens_combo.setCurrentText("1024")
     playground_widget.temperature_combo.setCurrentText("0.7")
     playground_widget.top_p_combo.setCurrentText("0.9")
@@ -288,7 +288,7 @@ def test_save_load_state(qtbot, playground_widget, settings):
     qtbot.addWidget(new_widget)
     
     # Verify state was restored
-    assert new_widget.model_combo.currentText() == "gpt-4o"
+    assert new_widget.model_combo.currentText() == "gpt-5.3"
     assert new_widget.max_tokens_combo.currentText() == "1024"
     assert new_widget.temperature_combo.currentText() == "0.7"
     assert new_widget.top_p_combo.currentText() == "0.9"

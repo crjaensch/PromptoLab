@@ -307,8 +307,12 @@ class SyntheticExampleGeneratorWidget(QWidget):
         if saved_model and self.model_combo.findText(saved_model) >= 0:
             self.model_combo.setCurrentText(saved_model)
         elif self.model_combo.count() > 0:
-            # Save the first model as the default if no saved model
+            # Save the first model as the default if no saved model or saved model is invalid
             self.settings.setValue("selected_model", self.model_combo.itemText(0))
+            self.model_combo.setCurrentIndex(0)
+        else:
+            # No models available - clear invalid saved model
+            self.settings.setValue("selected_model", "")
         
         # Connect model selection change to save the selection
         self.model_combo.currentTextChanged.connect(
@@ -356,8 +360,8 @@ class SyntheticExampleGeneratorWidget(QWidget):
         
         # Get model and parameters
         model = self.model_combo.currentText()
-        if not model:
-            self.show_status("No model selected", 5000)
+        if not model or self.model_combo.count() == 0:
+            self.show_status("No model available. Please check your LLM configuration.", 5000)
             return
         
         # Get parameters from UI

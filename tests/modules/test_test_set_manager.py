@@ -98,7 +98,7 @@ def test_generate_baseline(mock_llm_worker, mock_progress_dialog, qtbot, manager
     # Setup mock settings
     def mock_settings_value(key, default, type):
         settings = {
-            "selected_model": "gpt-4o-mini",
+            "selected_model": "gpt-6-luna",
             "max_tokens": "",
             "temperature": "",
             "top_p": ""
@@ -138,7 +138,7 @@ def test_generate_baseline(mock_llm_worker, mock_progress_dialog, qtbot, manager
     assert mock_llm_worker.call_count == len(test_prompts)
     for i, call in enumerate(mock_llm_worker.call_args_list):
         args, kwargs = call
-        assert kwargs["model_name"] == "gpt-4o-mini"
+        assert kwargs["model_name"] == "gpt-6-luna"
         assert kwargs["user_prompt"] == test_prompts[i]
         assert kwargs["system_prompt"] == system_prompt
 

@@ -29,32 +29,27 @@ logger = logging.getLogger(__name__)
 # You can customize or dynamically generate the supported models below.
 SUPPORTED_MODELS = [
     # OpenAI Models
-    "gpt-5.5",
+    "gpt-6.2-sol",
+    "gpt-6.1-sol",
+    "gpt-6.1-terra",
+    "gpt-6-luna",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.4-nano",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-    "gpt-4.1-nano",
     
     # Groq Cloud Models (Production)
-    "groq/llama-3.1-8b-instant",
-    "groq/llama-3.3-70b-versatile",
     "groq/openai/gpt-oss-120b",
     "groq/openai/gpt-oss-20b",
     
     # Google Gemini Models
-    "gemini/gemini-3.5-flash",
-    "gemini/gemini-3.1-pro",
+    # None at the moment
     
     # Ollama Models (local)
-    "ollama/gemma4:12b",
-    "ollama/qwen3.6:27b",
-    "ollama/qwen3.5:14b",
-    "ollama/llama3.1:8b",
-    "ollama/deepseek-r1:14b",
-    "ollama/gpt-oss:20b",
-    "ollama/phi4",
+    "ollama/qwen3.8:27b-mlx",
+    "ollama/muse-glimmer:30b-mlx",
+    "ollama/inkling-2-mini:latest",
     
     # ... add or remove models as needed
 ]
